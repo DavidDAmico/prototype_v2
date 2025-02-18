@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { UserIcon } from "@heroicons/react/24/outline";
+import Link from "next/link";
 
 export default function ResetPasswordPage() {
   const [username, setUsername] = useState("");
@@ -53,6 +54,17 @@ export default function ResetPasswordPage() {
         </form>
 
         {message && <p className="mt-4 text-center text-sm text-green-600">{message}</p>}
+
+        {/* Zurück zur Startseite Button */}
+        <div className="mt-4 text-center">
+          <Link href="/">
+            <button
+              className="w-full py-2 px-4 rounded-lg bg-gray-600 text-white font-medium text-sm hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+            >
+              Zurück zur Startseite
+            </button>
+          </Link>
+        </div>
       </div>
     </div>
   );

@@ -38,14 +38,14 @@ export default function HelpPage() {
           ))}
         </ul>
 
-        {/* Zurück zur Hauptseite Button */}
-        <div className="mt-6 flex justify-center">
-          <Link
-            href="/"
-            className="flex items-center gap-3 bg-blue-600 text-white px-6 py-3 rounded-lg transition hover:bg-blue-500"
-          >
-            <ArrowLeftIcon className="h-5 w-5" />
-            <span>Zurück zur Hauptseite</span>
+        {/* Zurück zur Startseite Button */}
+        <div className="mt-4 text-center">
+          <Link href="/">
+            <button
+              className="w-full py-2 px-4 rounded-lg bg-gray-600 text-white font-medium text-sm hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+            >
+              Zurück zur Startseite
+            </button>
           </Link>
         </div>
       </div>
