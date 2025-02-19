@@ -2,9 +2,12 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const router = useRouter();
 
   async function handleLogin(event: React.FormEvent) {
     event.preventDefault();
@@ -20,6 +23,7 @@ export default function LoginPage() {
       const res = await fetch("http://localhost:5001/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include", // Wichtig: credentials include, damit Cookies gesetzt werden!
         body: JSON.stringify({ username, password }),
       });
 
@@ -31,15 +35,9 @@ export default function LoginPage() {
         throw new Error(errorData.error || "Login fehlgeschlagen");
       }
 
-      const data = await res.json();
-      console.log("✅ Login erfolgreich, Token erhalten:", data.access_token);
-
-      // ✅ Speichert Token in localStorage
-      localStorage.setItem("access_token", data.access_token);
-
-
+      console.log("✅ Login erfolgreich – Cookies wurden gesetzt.");
       console.log("🔀 Weiterleitung zu /dashboard...");
-      window.location.href = "/dashboard";
+      router.push("/dashboard");
     } catch (error: any) {
       console.error("❌ Fehler beim Login:", error.message);
       setError(error.message);
@@ -54,7 +52,10 @@ export default function LoginPage() {
 
         <form className="mt-4 space-y-4" onSubmit={handleLogin}>
           <div>
-            <label htmlFor="username" className="block text-sm font-medium text-foreground">
+            <label
+              htmlFor="username"
+              className="block text-sm font-medium text-foreground"
+            >
               Username
             </label>
             <input
@@ -68,17 +69,32 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-foreground">
+            <label
+              htmlFor="password"
+              className="block text-sm font-medium text-foreground"
+            >
               Passwort
             </label>
             <input
               id="password"
               name="password"
-              type="password"
+              type={showPassword ? "text" : "password"}
               autoComplete="current-password"
               required
               className="block w-full mt-1 px-3 py-2 border rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-input-background text-input-text border-input-border"
             />
+            <div className="mt-2 flex items-center">
+              <input
+                id="show-password"
+                type="checkbox"
+                checked={showPassword}
+                onChange={() => setShowPassword(!showPassword)}
+                className="mr-2"
+              />
+              <label htmlFor="show-password" className="text-sm text-foreground">
+                Passwort anzeigen
+              </label>
+            </div>
           </div>
 
           <button

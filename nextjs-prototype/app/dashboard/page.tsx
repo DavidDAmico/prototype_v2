@@ -11,6 +11,14 @@ interface Project {
   name: string;
 }
 
+// Hilfsfunktion, um einen Cookie-Wert auszulesen
+function getCookie(name: string): string | null {
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) return parts.pop()?.split(";").shift() || null;
+  return null;
+}
+
 export default function DashboardPage() {
   const { user, loading } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
@@ -18,7 +26,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (user) {
-      // Beispiel-Daten → Später durch echten API-Call ersetzen
+      // Beispiel-Daten – später durch echten API-Call ersetzen
       setProjects([{ id: 1, name: "Projekt 1" }, { id: 2, name: "Projekt 2" }]);
     }
   }, [user]);
@@ -37,24 +45,25 @@ export default function DashboardPage() {
       </div>
     );
 
-  // Logout-Funktion
+  // Logout-Funktion: Sendet den CSRF-Token im Header, damit der Logout-Endpoint die Anfrage validiert
   const handleLogout = async () => {
     try {
+      // Lese den CSRF-Token aus dem entsprechenden Cookie (Standardname: "csrf_access_token")
+      const csrfToken = getCookie("csrf_access_token");
+
       await fetch("http://localhost:5001/auth/logout", {
         method: "POST",
-        credentials: "include", // ✅ Cookies senden
+        credentials: "include", // Sendet Cookies mit
         headers: {
-          Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+          "Content-Type": "application/json",
+          "X-CSRF-TOKEN": csrfToken || "",
         },
       });
-  
-      localStorage.removeItem("access_token"); // Lösche Token
-      router.push("/"); // Zur Startseite weiterleiten
+      router.push("/");
     } catch (error) {
       console.error("Fehler beim Logout:", error);
     }
   };
-  
 
   return (
     <main className="flex min-h-screen flex-col items-center p-6 bg-background text-foreground transition-none">
@@ -79,33 +88,35 @@ export default function DashboardPage() {
           {user.role === "master" && (
             <Link
               href="/admin"
-              className="flex items-center gap-3 rounded-lg bg-blue-600 dark:bg-blue-500 px-6 py-2 text-white text-sm font-medium transition hover:bg-blue-500 dark:hover:bg-blue-400"
+              className="flex items-center gap-3 rounded-lg bg-blue-600 dark:bg-blue-500 px-6 py-2 text-white text-sm font-medium hover:bg-blue-500 dark:hover:bg-blue-400"
             >
               <span>Admin Bereich</span>
             </Link>
           )}
           <button
             onClick={handleLogout}
-            className="flex items-center gap-3 rounded-lg bg-red-600 dark:bg-red-500 px-6 py-2 text-white text-sm font-medium transition hover:bg-red-500 dark:hover:bg-red-400"
+            className="flex items-center gap-3 rounded-lg bg-red-600 dark:bg-red-500 px-6 py-2 text-white text-sm font-medium hover:bg-red-500 dark:hover:bg-red-400"
           >
             <span>Logout</span>
           </button>
         </div>
       </div>
 
-      {/* Hero Section → Übersicht über Projekte */}
+      {/* Hero Section – Übersicht über Projekte */}
       <div className="flex flex-col md:flex-row items-center max-w-6xl mt-10">
         {/* Text Content */}
         <div className="md:w-2/5 text-center md:text-left p-6">
           <h2 className="text-4xl font-bold text-foreground dark:text-white">
-            Welcome back, {user.role === "master" ? "Master" : "User"}!
+            Welcome back
+            <span className="text-blue-600 dark:text-blue-400">,</span>{" "}
+            {user.role === "master" ? "Master" : "User"}
+            <span className="text-blue-600 dark:text-blue-400">!</span>
           </h2>
 
           <p className="mt-4 text-foreground dark:text-white">
             Here you can manage your projects and evaluations.
           </p>
 
-          {/* Falls noch keine Projekte existieren */}
           {projects.length === 0 && (
             <p className="mt-4 text-gray-500">No projects available yet.</p>
           )}
