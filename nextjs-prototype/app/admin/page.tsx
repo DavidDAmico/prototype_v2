@@ -1,24 +1,136 @@
-import useAuth from '../lib/useAuth';
-import { useRouter } from 'next/router';
+"use client";
 
-export default function AdminPage() {
-  const { user, loading } = useAuth();
-  const router = useRouter();
+import Link from "next/link";
+import Image from "next/image";
 
-  if (loading) return <p className="text-foreground">Lädt...</p>;
-  if (!user || user.role !== 'master') {
-    router.push('/dashboard');
-    return null;
-  }
-
+export default function AdminDashboard() {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-background text-foreground p-6 transition-colors">
-      <h1 className="text-2xl font-bold">Admin-Bereich</h1>
-      <p className="mt-4">Hier kannst du neue Projekte erstellen:</p>
+    <div className="p-8 w-full text-black">
+      <div className="flex flex-col md:flex-row gap-8 max-w-6xl mx-auto">
+        {/* Linke Spalte: Benutzerverwaltung */}
+        <div className="flex-1 bg-blue-100 dark:bg-blue-200 p-6 rounded-lg space-y-4">
+          <h2 className="text-2xl font-bold text-center mb-4">Useradministration</h2>
+          <Link
+            href="/create-user"
+            className="flex items-center gap-2 px-4 py-2 bg-white text-black rounded hover:bg-gray-200 transition text-center"
+          >
+            <div className="w-8 flex justify-start">
+              <Image
+                src="/icons/add-user.png"
+                alt="Add User Icon"
+                width={20}
+                height={20}
+              />
+            </div>
+            <span>Create a new user</span>
+          </Link>
+          <Link
+            href="/change-password"
+            className="flex items-center gap-2 px-4 py-2 bg-white text-black rounded hover:bg-gray-200 transition text-center"
+          >
+            
+            <div className="w-8 flex justify-start">
+              <Image
+                src="/icons/edit.png"
+                alt="Edit User Icon"
+                width={20}
+                height={20}
+              />
+            </div>
+            <span>Edit user</span>
+          </Link>
+          <Link
+            href="/delete-user"
+            className="flex items-center gap-2 px-4 py-2 bg-white text-black rounded hover:bg-gray-200 transition text-center"
+          >
 
-      <button className="mt-6 px-6 py-2 bg-green-600 dark:bg-green-500 text-white rounded-lg hover:bg-green-500 dark:hover:bg-green-400 transition">
-        Neues Projekt anlegen
-      </button>
+            <div className="w-8 flex justify-start">
+              <Image
+                src="/icons/password.png"
+                alt="Password Icon"
+                width={20}
+                height={20}
+              />
+            </div>
+            <span>Change password</span>
+          </Link>
+          <Link
+            href="/edit-user"
+            className="flex items-center gap-2 px-4 py-2 bg-white text-black rounded hover:bg-gray-200 transition text-center"
+          >
+            <div className="w-8 flex justify-start">
+              <Image
+                src="/icons/delete-user.png"
+                alt="Delete User Icon"
+                width={20}
+                height={20}
+              />
+            </div>
+            <span>Delete user</span>
+          </Link>
+        </div>
+
+        {/* Rechte Spalte: Caseverwaltung */}
+        <div className="flex-1 bg-blue-100 dark:bg-blue-200 p-6 rounded-lg space-y-4">
+          <h2 className="text-2xl font-bold text-center mb-4">Caseadministration</h2>
+          <Link
+            href="/create-case"
+            className="flex items-center gap-2 px-4 py-2 bg-white text-black rounded hover:bg-gray-200 transition text-center"
+          >
+            <div className="w-8 flex justify-start">
+              <Image
+                src="/icons/create-case.png"
+                alt="Create Case Icon"
+                width={20}
+                height={20}
+              />
+            </div>
+            <span>Create a new case</span>
+          </Link>
+          <Link
+            href="/edit-case"
+            className="flex items-center gap-2 px-4 py-2 bg-white text-black rounded hover:bg-gray-200 transition text-center"
+          >
+            <div className="w-8 flex justify-start">
+              <Image
+                src="/icons/edit-case.png"
+                alt="Edit Case Icon"
+                width={20}
+                height={20}
+              />
+            </div>
+            <span>Edit a case</span>
+          </Link>
+          <Link
+            href="/case-status"
+            className="flex items-center gap-2 px-4 py-2 bg-white text-black rounded hover:bg-gray-200 transition text-center"
+          >
+            <div className="w-8 flex justify-start">
+              <Image
+                src="/icons/status.png"
+                alt="Case Status Icon"
+                width={20}
+                height={20}
+              />
+            </div>
+            <span>Change case status</span>
+          </Link>
+          <Link
+            href="/delete-case"
+            className="flex items-center gap-2 px-4 py-2 bg-white text-black rounded hover:bg-gray-200 transition text-center"
+          >
+            <div className="w-8 flex justify-start">
+              <Image
+                src="/icons/delete.png"
+                alt="Delete Case Icon"
+                width={20}
+                height={20}
+              />
+            </div>
+            <span>Delete a case</span>
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }

@@ -31,7 +31,7 @@ html, body {
   min-height: 100%;
   background-color: var(--background) !important;
   color: var(--foreground) !important;
-  transition: none !important; /* Sofortiger Wechsel */
+  transition: none !important;
 }
 
 /* Standard-Container */
@@ -41,13 +41,24 @@ html, body {
   transition: none;
 }
 
-/* Dark Mode Container Fix */
 .dark .w-full, .dark .container, .dark .card {
   background-color: var(--background);
   color: var(--foreground);
 }
 
-/* Einheitliche Buttons */
+/* Eigene Klasse für das fixe blaue Frame – soll immer gleich aussehen */
+.fixed-blue-frame {
+  background-color: #bfdbfe !important; /* Helles Blau */
+  color: #000000 !important;            /* Schwarzer Text */
+}
+
+/* Erzwinge innerhalb des Frames immer schwarze Textfarbe */
+.fixed-blue-frame,
+.fixed-blue-frame * {
+  color: #000000 !important;
+}
+
+/* Einheitliche Buttons (nicht betroffen, da Icons und Buttons eigene Klassen haben) */
 button, .btn {
   background-color: var(--button-background) !important;
   color: var(--button-text) !important;
@@ -58,41 +69,38 @@ button, .btn {
   border: none;
   display: inline-block;
   width: fit-content;
-  opacity: 1 !important; /* Sichtbarkeit erzwingen */
+  opacity: 1 !important;
   transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
 }
 
-/* Dark Mode Buttons */
 .dark button, .dark .btn {
   background-color: var(--button-background) !important;
   color: var(--button-text) !important;
   opacity: 1 !important;
 }
 
-/* Button Hover */
 button:hover, .btn:hover {
   background-color: var(--button-hover) !important;
 }
 
-/* Dark Mode Button Hover */
 .dark button:hover, .dark .btn:hover {
   background-color: var(--button-hover) !important;
 }
 
-/* Labels & Formulare im Dark Mode heller */
+/* Globale Label-Regeln bleiben unverändert */
 label {
   color: var(--foreground);
 }
 
 .dark label {
-  color: white; /* Noch etwas heller für bessere Lesbarkeit */
+  color: white;
 }
 
-/* Fix für h2 und p: Light Mode schwarz, Dark Mode weiß */
+/* Fix für h2 und p – global, aber innerhalb fixed-blue-frame werden sie überschrieben */
 h2, p {
-  color: #000000 !important; /* Immer schwarz im Light Mode */
+  color: #000000 !important;
 }
 
 .dark h2, .dark p {
-  color: #ffffff !important; /* Immer weiß im Dark Mode */
+  color: #ffffff !important;
 }
