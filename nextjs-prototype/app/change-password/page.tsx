@@ -19,7 +19,7 @@ export default function ChangePasswordPage() {
   useEffect(() => {
     async function fetchUsers() {
       try {
-        const res = await fetch("http://localhost:5001/auth/users", {
+        const res = await fetch("http://localhost:9000/auth/users", {
           credentials: "include",
         });
         if (!res.ok) throw new Error("Fehler beim Laden der Nutzer");
@@ -52,7 +52,7 @@ export default function ChangePasswordPage() {
     setError("");
     try {
       const csrfToken = getCookie("csrf_access_token");
-      const res = await fetch("http://localhost:5001/admin/change-password", {
+      const res = await fetch("http://localhost:9000/admin/change-password", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",

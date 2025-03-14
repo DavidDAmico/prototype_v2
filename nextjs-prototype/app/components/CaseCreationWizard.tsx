@@ -37,7 +37,7 @@ export default function CaseCreationWizard() {
   useEffect(() => {
     async function fetchUsers() {
       try {
-        const res = await fetch("http://localhost:5001/auth/users", {
+        const res = await fetch("http://localhost:9000/auth/users", {
           credentials: "include",
         });
         if (!res.ok) throw new Error("Fehler beim Laden der Nutzer");
