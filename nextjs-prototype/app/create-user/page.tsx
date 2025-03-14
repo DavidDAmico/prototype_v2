@@ -36,7 +36,7 @@ export default function CreateUserPage() {
     const csrfToken = getCookie("csrf_access_token");
 
     try {
-      const res = await fetch("http://localhost:5001/admin/create-user", {
+      const res = await fetch("http://localhost:9000/admin/create-user", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

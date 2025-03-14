@@ -58,8 +58,10 @@ html, body {
   color: #000000 !important;
 }
 
-/* Einheitliche Buttons (nicht betroffen, da Icons und Buttons eigene Klassen haben) */
-button, .btn {
+/* Einheitliche Buttons (nicht betroffen, da Icons und Buttons eigene Klassen haben)
+   Buttons mit der Klasse "custom-action-button" werden hieraus ausgenommen */
+button:not(.custom-action-button), 
+.btn:not(.custom-action-button) {
   background-color: var(--button-background) !important;
   color: var(--button-text) !important;
   padding: 0.75rem 1.25rem;
@@ -73,17 +75,20 @@ button, .btn {
   transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
 }
 
-.dark button, .dark .btn {
+.dark button:not(.custom-action-button), 
+.dark .btn:not(.custom-action-button) {
   background-color: var(--button-background) !important;
   color: var(--button-text) !important;
   opacity: 1 !important;
 }
 
-button:hover, .btn:hover {
+button:not(.custom-action-button):hover, 
+.btn:not(.custom-action-button):hover {
   background-color: var(--button-hover) !important;
 }
 
-.dark button:hover, .dark .btn:hover {
+.dark button:not(.custom-action-button):hover, 
+.dark .btn:not(.custom-action-button):hover {
   background-color: var(--button-hover) !important;
 }
 
@@ -103,4 +108,14 @@ h2, p {
 
 .dark h2, .dark p {
   color: #ffffff !important;
+}
+
+/* Eigene Klasse für weiße Buttons außerhalb des Headers */
+.white-button {
+  background-color: white !important;
+  color: black !important;
+}
+
+.white-button:hover {
+  background-color: #e5e7eb !important; /* Leichtes Grau bei Hover */
 }

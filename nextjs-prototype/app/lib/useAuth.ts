@@ -14,7 +14,7 @@ export default function useAuth() {
   useEffect(() => {
     async function fetchUser() {
       try {
-        const res = await fetch("http://localhost:5001/auth/protected", {
+        const res = await fetch("http://localhost:9000/auth/protected", {
           method: "GET",
           headers: {
             "Content-Type": "application/json",

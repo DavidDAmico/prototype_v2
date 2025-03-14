@@ -6,12 +6,20 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 
-interface Project {
+interface Case {
   id: number;
-  name: string;
+  case_type: string;
+  created_at: string;
+  // Weitere Felder ergänzen, falls benötigt
 }
 
-// Hilfsfunktion, um einen Cookie-Wert auszulesen
+interface AuthUser {
+  user_id: number;
+  role: string;
+  username?: string;
+  // weitere Felder
+}
+
 function getCookie(name: string): string | null {
   const value = `; ${document.cookie}`;
   const parts = value.split(`; ${name}=`);
@@ -20,14 +28,51 @@ function getCookie(name: string): string | null {
 }
 
 export default function DashboardPage() {
-  const { user, loading } = useAuth();
-  const [projects, setProjects] = useState<Project[]>([]);
+  const { user, loading } = useAuth(); // user wird als AuthUser erwartet
+  const [assignedCases, setAssignedCases] = useState<Case[]>([]);
+  const [caseHistory, setCaseHistory] = useState<Case[]>([]);
   const router = useRouter();
 
   useEffect(() => {
-    if (user) {
-      // Beispiel-Daten – später durch echten API-Call ersetzen
-      setProjects([{ id: 1, name: "Projekt 1" }, { id: 2, name: "Projekt 2" }]);
+    if (user && (user as AuthUser).user_id) {
+      async function fetchAssignedCases() {
+        try {
+          const res = await fetch(
+            `http://localhost:9000/cases/assigned/${(user as AuthUser).user_id}`,
+            {
+              credentials: "include",
+            }
+          );
+          if (!res.ok) {
+            throw new Error("Fehler beim Laden der zugewiesenen Cases");
+          }
+          const data = await res.json();
+          setAssignedCases(data);
+        } catch (error: any) {
+          console.error(error.message);
+        }
+      }
+
+      async function fetchCaseHistory() {
+        try {
+          const res = await fetch(
+            `http://localhost:9000/cases/history/${(user as AuthUser).user_id}`,
+            {
+              credentials: "include",
+            }
+          );
+          if (!res.ok) {
+            throw new Error("Fehler beim Laden der Case-Historie");
+          }
+          const data = await res.json();
+          setCaseHistory(data);
+        } catch (error: any) {
+          console.error(error.message);
+        }
+      }
+
+      fetchAssignedCases();
+      fetchCaseHistory();
     }
   }, [user]);
 
@@ -45,20 +90,21 @@ export default function DashboardPage() {
       </div>
     );
 
-  // Logout-Funktion: Sendet den CSRF-Token im Header, damit der Logout-Endpoint die Anfrage validiert
+  // Logout-Funktion
   const handleLogout = async () => {
     try {
-      // Lese den CSRF-Token aus dem entsprechenden Cookie (Standardname: "csrf_access_token")
       const csrfToken = getCookie("csrf_access_token");
-
-      await fetch("http://localhost:5001/auth/logout", {
+      const res = await fetch("http://localhost:9000/auth/logout", {
         method: "POST",
-        credentials: "include", // Sendet Cookies mit
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
           "X-CSRF-TOKEN": csrfToken || "",
         },
       });
+      if (!res.ok) {
+        throw new Error("Fehler beim Logout");
+      }
       router.push("/");
     } catch (error) {
       console.error("Fehler beim Logout:", error);
@@ -68,9 +114,8 @@ export default function DashboardPage() {
   return (
     <main className="flex min-h-screen flex-col items-center p-6 bg-background text-foreground transition-none">
       {/* Header */}
-      <div className="flex w-full max-w-6xl justify-between items-center py-6 bg-gray-100 dark:bg-header-background px-4 rounded-lg shadow-md">
+      <div className="flex w-full max-w-6xl justify-between items-center py-6 bg-gray-100 dark:bg-header-background px-4 rounded-lg shadow-md gap-6">
         <div className="flex items-center gap-3">
-          {/* Logo */}
           <Image
             src="/logo.svg"
             width={50}
@@ -79,13 +124,11 @@ export default function DashboardPage() {
             className="w-12 h-12"
           />
           <h1 className="text-3xl font-bold text-gray-900 dark:text-blue-400">
-            Dashboard - Manage your projects
+            Dashboard
           </h1>
         </div>
-
-        {/* Buttons (Admin für Master + Logout für alle) */}
         <div className="flex gap-4">
-          {user.role === "master" && (
+          {(user as AuthUser).role === "master" && (
             <Link
               href="/admin"
               className="flex items-center gap-3 rounded-lg bg-blue-600 dark:bg-blue-500 px-6 py-2 text-white text-sm font-medium hover:bg-blue-500 dark:hover:bg-blue-400"
@@ -102,37 +145,51 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Hero Section – Übersicht über Projekte */}
-      <div className="flex flex-col md:flex-row items-center max-w-6xl mt-10">
-        {/* Text Content */}
-        <div className="md:w-2/5 text-center md:text-left p-6">
-          <h2 className="text-4xl font-bold text-foreground dark:text-white">
-            Welcome back
-            <span className="text-blue-600 dark:text-blue-400">,</span>{" "}
-            {user.role === "master" ? "Master" : "User"}
-            <span className="text-blue-600 dark:text-blue-400">!</span>
-          </h2>
-
-          <p className="mt-4 text-foreground dark:text-white">
-            Here you can manage your projects and evaluations.
+      {/* Anzeige der Cases */}
+      <div className="max-w-6xl mt-10 w-full">
+        <h2 className="text-2xl font-bold mb-4">Dir zugewiesene Cases</h2>
+        {assignedCases.length === 0 ? (
+          <p className="text-gray-500">
+            Du hast aktuell keine zugewiesenen Cases.
           </p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {assignedCases.map((c) => (
+              <Link
+                key={c.id}
+                href={`/cases/${c.id}/edit`}
+                className="p-4 bg-gray-200 dark:bg-gray-700 rounded-lg shadow-lg text-center"
+              >
+                <p>Case ID: {c.id}</p>
+                <p>Typ: {c.case_type}</p>
+                <p>
+                  Erstellt: {new Date(c.created_at).toLocaleDateString("de-DE")}
+                </p>
+              </Link>
+            ))}
+          </div>
+        )}
 
-          {projects.length === 0 && (
-            <p className="mt-4 text-gray-500">No projects available yet.</p>
-          )}
-        </div>
-
-        {/* Projekt-Liste als Cards */}
-        <div className="md:w-3/5 flex flex-wrap gap-4 justify-center p-6">
-          {projects.map((project) => (
-            <div
-              key={project.id}
-              className="p-4 bg-gray-200 dark:bg-gray-700 rounded-lg shadow-lg w-64 text-center"
-            >
-              {project.name}
-            </div>
-          ))}
-        </div>
+        <h2 className="text-2xl font-bold mt-10 mb-4">Case Historie</h2>
+        {caseHistory.length === 0 ? (
+          <p className="text-gray-500">Noch keine abgeschlossenen Cases.</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {caseHistory.map((c) => (
+              <div
+                key={c.id}
+                className="p-4 bg-gray-300 dark:bg-gray-600 rounded-lg shadow-lg"
+              >
+                <p>Case ID: {c.id}</p>
+                <p>Typ: {c.case_type}</p>
+                <p>
+                  Abgeschlossen:{" "}
+                  {new Date(c.created_at).toLocaleDateString("de-DE")}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </main>
   );
