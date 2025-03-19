@@ -39,6 +39,9 @@ export default function CreateCasePage() {
   // Schritt 4: Technologien (dynamisch) – initial ein leeres Feld
   const [technologies, setTechnologies] = useState<string[]>([""]);
 
+  const [isLoading, setIsLoading] = useState(false);
+  const [projectId, setProjectId] = useState<number>(2); // Default to our created project ID
+
   // User laden – alle User (auch Master)
   useEffect(() => {
     async function fetchUsers() {
@@ -54,6 +57,34 @@ export default function CreateCasePage() {
       }
     }
     fetchUsers();
+  }, []);
+
+  // Fetch projects on component mount
+  useEffect(() => {
+    async function fetchProjects() {
+      try {
+        setIsLoading(true);
+        const res = await fetch("http://localhost:9000/projects/", {
+          credentials: "include",
+        });
+        
+        if (res.ok) {
+          const projects = await res.json();
+          if (projects && projects.length > 0) {
+            setProjectId(projects[0].id);
+            console.log("Using project ID:", projects[0].id);
+          } else {
+            console.log("No projects found, using default project ID:", projectId);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching projects:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    fetchProjects();
   }, []);
 
   // Schließt das Dropdown, wenn außerhalb geklickt wird
@@ -101,24 +132,29 @@ export default function CreateCasePage() {
 
   // Abschicken: Case speichern (nur die vom Backend erwarteten Felder)
   async function handleSubmit() {
-    const projectId = 1; // Beispiel: feste Projekt-ID, passe an
-    // Mapping: "intern" -> "internal", "extern" -> "external"
     const mappedCaseType = caseType === "intern" ? "internal" : "external";
+
+    const validCriteria = criteria.filter(c => c.trim() !== "").map(c => c);  // Send only non-empty criterion names
+    const validTechnologies = technologies.filter(t => t.trim() !== "").map(t => t);  // Send only non-empty technology names
 
     const payload = {
       project_id: projectId,
       case_type: mappedCaseType,
       show_results: showEvaluation,
-      assigned_users: selectedUserIds, // Hier werden die ausgewählten User übermittelt
+      criteria: validCriteria,
+      technologies: validTechnologies,
+      name: caseName.trim() || undefined // Only include if not empty
     };
 
     console.log("Erstelle Case mit Payload:", payload);
 
     try {
-      const res = await fetch("http://localhost:9000/cases/create", {
+      const res = await fetch("http://localhost:9000/cases/", {
         method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
       if (!res.ok) {

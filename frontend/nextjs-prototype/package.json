@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    ".next": "link:.next",
     "@heroicons/react": "^2.2.0",
     "axios": "^1.7.9",
     "formik": "^2.4.6",
@@ -16,6 +17,7 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.2.0",
+    "rm": "^0.1.8",
     "yup": "^1.6.1"
   },
   "devDependencies": {

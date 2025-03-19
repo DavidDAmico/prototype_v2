@@ -39,19 +39,36 @@ def create_app():
         token = TokenBlacklist.query.filter_by(jti=jti).first()
         return token is not None
 
-    # CORS konfigurieren – nur das Frontend (localhost:3000) wird zugelassen
-    CORS(app, supports_credentials=True, resources={r"/*": {"origins": "http://localhost:3000"}})
+    # CORS konfigurieren – Frontend und Backend URLs zulassen
+    CORS(app, 
+         supports_credentials=True, 
+         resources={
+             r"/*": {
+                 "origins": ["http://localhost:3000", "http://localhost:9000"],
+                 "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+                 "allow_headers": ["Content-Type", "Authorization", "X-CSRF-TOKEN"],
+                 "expose_headers": ["Content-Type", "Authorization"],
+                 "allow_credentials": True
+             }
+         })
 
     # Blueprint-Registrierung (API-Routen)
     from src.routes.auth import auth_bp
     from src.routes.projects import projects_bp
     from src.routes.cases import cases_bp
     from src.routes.admin import admin_bp  # Admin-Blueprint importieren
+    from src.routes.criteria import criteria_bp
+    from src.routes.technologies import technologies_bp
 
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(projects_bp, url_prefix='/projects')
-    app.register_blueprint(cases_bp, url_prefix='/cases')
+    app.register_blueprint(cases_bp, url_prefix='/cases')  # Keep this without trailing slash
     app.register_blueprint(admin_bp, url_prefix='/admin')  # Admin-Endpoints unter /admin
+    app.register_blueprint(criteria_bp, url_prefix='/criteria')
+    app.register_blueprint(technologies_bp, url_prefix='/technologies')
+
+    # Disable strict slashes to prevent automatic redirects
+    app.url_map.strict_slashes = False
 
     # Erstelle die Datenbank-Tabellen beim Start
     with app.app_context():

@@ -56,6 +56,21 @@ class Case(db.Model):
 
     # Beziehung zu CaseRounds
     rounds = db.relationship("CaseRound", back_populates="case")
+    
+    # Beziehungen zu Kriterien und Technologien
+    criteria = db.relationship('Criterion', secondary='case_criteria')
+    technologies = db.relationship('Technology', secondary='case_technologies')
+
+# Association tables for case-specific relationships
+case_criteria = db.Table('case_criteria',
+    db.Column('case_id', db.Integer, db.ForeignKey('cases.id'), primary_key=True),
+    db.Column('criterion_id', db.Integer, db.ForeignKey('criteria.id'), primary_key=True)
+)
+
+case_technologies = db.Table('case_technologies',
+    db.Column('case_id', db.Integer, db.ForeignKey('cases.id'), primary_key=True),
+    db.Column('technology_id', db.Integer, db.ForeignKey('technologies.id'), primary_key=True)
+)
 
 class CaseRound(db.Model):
     __tablename__ = 'case_rounds'
@@ -73,6 +88,7 @@ class Evaluation(db.Model):
     case_round_id = db.Column(db.Integer, db.ForeignKey('case_rounds.id'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     criterion_id = db.Column(db.Integer, db.ForeignKey('criteria.id'), nullable=False)
+    technology_id = db.Column(db.Integer, db.ForeignKey('technologies.id'), nullable=True)  # Nullable for regular criterion evaluations
     score = db.Column(db.Numeric(5,2), nullable=False)  # Bewertung zwischen 0 und 10
     created_at = db.Column(db.DateTime, server_default=db.func.now())
 

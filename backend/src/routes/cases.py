@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from src.models import db, Case, CaseRound, Project, User, ProjectUser
+from src.models import db, Case, CaseRound, Project, User, ProjectUser, Criterion, Technology, Evaluation
 
 cases_bp = Blueprint('cases', __name__)
 
@@ -34,21 +34,21 @@ def get_round1_cases():
         } for c in round1_cases
     ]), 200
 
-@cases_bp.route('/create', methods=['POST'])
+@cases_bp.route('/', methods=['POST'])
 def create_case():
+        
     data = request.get_json()
-
-    # Überprüfe, ob eine Projekt-ID im Payload enthalten ist
     project_id = data.get('project_id')
-    # Erwartet eine Liste von User-IDs, die zugewiesen werden sollen
-    assigned_user_ids = data.get('assigned_users', [])
-    
-    if not project_id:
-        return jsonify({"message": "project_id is required"}), 400
+    case_type = data.get('case_type')
+    show_results = data.get('show_results', False)
+    criteria_names = data.get('criteria', [])  # List of criterion names
+    technology_names = data.get('technologies', [])  # List of technology names
 
+    if not project_id or not case_type:
+        return jsonify({"message": "project_id and case_type are required"}), 400
+
+    # Validate project exists
     project = Project.query.get(project_id)
-    
-    # Falls das Projekt nicht existiert, erstelle ein Standardprojekt
     if not project:
         default_master_id = 1  # Standard-Master-Benutzer
         project = Project(
@@ -60,53 +60,98 @@ def create_case():
         db.session.commit()
         project_id = project.id
 
-    # Erstelle den neuen Case
-    new_case = Case(
-        project_id=project_id,
-        case_type=data['case_type'],
-        show_results=data.get('show_results', False)
-    )
-    db.session.add(new_case)
-    db.session.commit()
+    try:
+        # Create new case
+        new_case = Case(
+            project_id=project_id,
+            case_type=case_type,
+            show_results=show_results
+        )
+        db.session.add(new_case)
+        db.session.flush()  # Get the case ID before committing
 
-    # Sicherstellen, dass alle relevanten User in project_users eingetragen sind
+        # Create and associate criteria
+        for name in criteria_names:
+            if name.strip():  # Skip empty names
+                criterion = Criterion(
+                    project_id=project_id,
+                    name=name.strip()
+                )
+                db.session.add(criterion)
+                db.session.flush()  # Get the criterion ID
+                new_case.criteria.append(criterion)
 
-    # Hole die bereits zugeordneten User für dieses Projekt
-    project_users = ProjectUser.query.filter_by(project_id=project_id).all()
-    existing_user_ids = {pu.user_id for pu in project_users}
+        # Create and associate technologies
+        for name in technology_names:
+            if name.strip():  # Skip empty names
+                technology = Technology(
+                    project_id=project_id,
+                    name=name.strip()
+                )
+                db.session.add(technology)
+                db.session.flush()  # Get the technology ID
+                new_case.technologies.append(technology)
 
-    # Falls der Master des Projekts nicht in project_users ist, füge ihn hinzu
-    if project.master_id not in existing_user_ids:
-        db.session.add(ProjectUser(project_id=project_id, user_id=project.master_id))
-        existing_user_ids.add(project.master_id)
+        db.session.commit()
+        return jsonify({
+            "message": "Case created successfully",
+            "case_id": new_case.id
+        }), 201
 
-    # Füge alle zugewiesenen User hinzu, sofern sie noch nicht eingetragen sind
-    for user_id in assigned_user_ids:
-        if user_id not in existing_user_ids:
-            user = User.query.get(user_id)
-            if user:
-                db.session.add(ProjectUser(project_id=project_id, user_id=user_id))
-                existing_user_ids.add(user_id)
-
-    db.session.commit()
-
-    return jsonify({"message": "Case created", "id": new_case.id}), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"message": f"Error creating case: {str(e)}"}), 500
 
 @cases_bp.route('/<int:case_id>', methods=['GET'])
 def get_case(case_id):
+    """Get a specific case with its criteria, technologies, and rounds."""
     case = Case.query.get(case_id)
     if not case:
         return jsonify({"message": "Case not found"}), 404
+
+    # Get case-specific criteria and technologies
+    criteria = [
+        {
+            "id": c.id,
+            "name": c.name,
+            "evaluations": [
+                {
+                    "user_id": e.user_id,
+                    "score": float(e.score),
+                    "created_at": e.created_at.isoformat()
+                }
+                for e in Evaluation.query.filter_by(criterion_id=c.id).all()
+            ]
+        }
+        for c in case.criteria
+    ]
+
+    technologies = [
+        {
+            "id": t.id,
+            "name": t.name
+        }
+        for t in case.technologies
+    ]
+
+    rounds = [
+        {
+            "id": r.id,
+            "round_number": r.round_number,
+            "is_completed": r.is_completed
+        }
+        for r in case.rounds
+    ]
+
     return jsonify({
         "id": case.id,
         "project_id": case.project_id,
         "case_type": case.case_type,
         "show_results": case.show_results,
-        "created_at": case.created_at.isoformat() if case.created_at else None,
-        "rounds": [
-            {"id": r.id, "round_number": r.round_number, "is_completed": r.is_completed}
-            for r in case.rounds
-        ]
+        "created_at": case.created_at.isoformat(),
+        "criteria": criteria,
+        "technologies": technologies,
+        "rounds": rounds
     }), 200
 
 @cases_bp.route('/<int:case_id>', methods=['PUT'])
@@ -132,6 +177,96 @@ def add_case_round(case_id):
     db.session.add(new_round)
     db.session.commit()
     return jsonify({"message": "New round added", "id": new_round.id}), 201
+
+@cases_bp.route('/<int:case_id>/evaluate', methods=['POST'])
+def evaluate_case(case_id):
+    data = request.get_json()
+    user_id = data.get('user_id')
+    round_id = data.get('round_id')
+    evaluations = data.get('evaluations', [])  # List of {criterion_id, score}
+
+    if not user_id or not round_id or not evaluations:
+        return jsonify({"message": "user_id, round_id and evaluations are required"}), 400
+
+    case_round = CaseRound.query.get(round_id)
+    if not case_round or case_round.case_id != case_id:
+        return jsonify({"message": "Invalid round_id"}), 400
+
+    # Save evaluations
+    for eval_data in evaluations:
+        criterion_id = eval_data.get('criterion_id')
+        score = eval_data.get('score')
+        
+        if not criterion_id or score is None:
+            continue
+            
+        # Check if evaluation already exists
+        existing_eval = Evaluation.query.filter_by(
+            case_round_id=round_id,
+            user_id=user_id,
+            criterion_id=criterion_id
+        ).first()
+        
+        if existing_eval:
+            existing_eval.score = score
+        else:
+            new_eval = Evaluation(
+                case_round_id=round_id,
+                user_id=user_id,
+                criterion_id=criterion_id,
+                score=score
+            )
+            db.session.add(new_eval)
+
+    db.session.commit()
+    return jsonify({"message": "Evaluations saved successfully"}), 200
+
+@cases_bp.route('/<int:case_id>/evaluate-tech-criteria', methods=['POST'])
+def evaluate_tech_criteria(case_id):
+    data = request.get_json()
+    user_id = data.get('user_id')
+    round_id = data.get('round_id')
+    tech_criteria_matrix = data.get('tech_criteria_matrix', {})  # Format: {tech_id: {criterion_id: score}}
+
+    if not user_id or not round_id or not tech_criteria_matrix:
+        return jsonify({"message": "user_id, round_id and tech_criteria_matrix are required"}), 400
+
+    case_round = CaseRound.query.get(round_id)
+    if not case_round or case_round.case_id != case_id:
+        return jsonify({"message": "Invalid round_id"}), 400
+
+    try:
+        # Save each technology-criterion evaluation
+        for tech_id, criteria_scores in tech_criteria_matrix.items():
+            tech_id = int(tech_id)  # Convert to integer
+            for criterion_id, score in criteria_scores.items():
+                criterion_id = int(criterion_id)  # Convert to integer
+                # Check if evaluation already exists
+                existing_eval = Evaluation.query.filter_by(
+                    case_round_id=round_id,
+                    user_id=user_id,
+                    criterion_id=criterion_id,
+                    technology_id=tech_id
+                ).first()
+
+                if existing_eval:
+                    existing_eval.score = score
+                else:
+                    new_eval = Evaluation(
+                        case_round_id=round_id,
+                        user_id=user_id,
+                        criterion_id=criterion_id,
+                        technology_id=tech_id,
+                        score=score
+                    )
+                    db.session.add(new_eval)
+
+        db.session.commit()
+        return jsonify({"message": "Technology-criteria evaluations saved successfully"}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"message": f"Error saving evaluations: {str(e)}"}), 500
 
 @cases_bp.route('/assigned/<int:user_id>', methods=['GET'])
 def get_assigned_cases(user_id):
