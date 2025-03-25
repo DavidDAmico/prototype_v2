@@ -11,6 +11,7 @@ class User(db.Model):
     password_hash = db.Column(db.Text, nullable=False)
     role = db.Column(db.String(10), nullable=False)  # 'master' oder 'user'
     created_at = db.Column(db.DateTime, server_default=db.func.now())
+    custom_fields = db.Column(db.JSON, nullable=True)  # Für zusätzliche Informationen
 
     # Beziehung zu Projekten
     projects = db.relationship("Project", back_populates="master")
@@ -37,8 +38,25 @@ class ProjectUser(db.Model):
 class Criterion(db.Model):
     __tablename__ = 'criteria'
     id = db.Column(db.Integer, primary_key=True)
-    project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
-    name = db.Column(db.String(100), nullable=False)
+    project_id = db.Column(db.Integer, db.ForeignKey('projects.id'))
+    name = db.Column(db.String(255))
+    rating = db.Column(db.Integer)  # Likert-Skala 1-5
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Beziehungen
+    cases = db.relationship('Case', secondary='case_criteria', back_populates='criteria')
+    evaluations = db.relationship('Evaluation', back_populates='criterion')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'project_id': self.project_id,
+            'name': self.name,
+            'rating': self.rating,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
 
 class Technology(db.Model):
     __tablename__ = 'technologies'
@@ -53,13 +71,17 @@ class Case(db.Model):
     case_type = db.Column(db.String(10), nullable=False)  # 'internal' oder 'external'
     show_results = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, server_default=db.func.now())
+    assigned_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
 
     # Beziehung zu CaseRounds
     rounds = db.relationship("CaseRound", back_populates="case")
     
     # Beziehungen zu Kriterien und Technologien
-    criteria = db.relationship('Criterion', secondary='case_criteria')
+    criteria = db.relationship('Criterion', secondary='case_criteria', back_populates='cases')
     technologies = db.relationship('Technology', secondary='case_technologies')
+    
+    # Beziehung zum zugewiesenen Benutzer
+    assigned_user = db.relationship("User", foreign_keys=[assigned_user_id])
 
 # Association tables for case-specific relationships
 case_criteria = db.Table('case_criteria',
@@ -91,6 +113,9 @@ class Evaluation(db.Model):
     technology_id = db.Column(db.Integer, db.ForeignKey('technologies.id'), nullable=True)  # Nullable for regular criterion evaluations
     score = db.Column(db.Numeric(5,2), nullable=False)  # Bewertung zwischen 0 und 10
     created_at = db.Column(db.DateTime, server_default=db.func.now())
+
+    # Beziehung zum Kriterium
+    criterion = db.relationship("Criterion", back_populates="evaluations")
 
 # Neue Tabelle für die Token-Blacklist (persistente Speicherung)
 class TokenBlacklist(db.Model):

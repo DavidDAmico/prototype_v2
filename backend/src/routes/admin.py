@@ -18,32 +18,50 @@ def admin_create_user():
         return jsonify({"error": "Access forbidden"}), 403
 
     data = request.get_json()
+    email = data.get("username")  # Email wird als Username verwendet
+    password = data.get("password")
+    
     # Prüfe erforderliche Felder
-    if not data.get("username") or not data.get("email") or not data.get("password"):
-        return jsonify({"error": "Username, Email und Passwort sind erforderlich"}), 400
+    if not email or not password:
+        return jsonify({"error": "Email und Passwort sind erforderlich"}), 400
+
+    # Validate email format
+    if not "@" in email or not "." in email:
+        return jsonify({"error": "Ungültige E-Mail-Adresse"}), 400
 
     # Prüfe, ob der Benutzer bereits existiert
     existing_user = User.query.filter(
-        (User.username == data["username"]) | (User.email == data["email"])
+        (User.username == email) | (User.email == email)
     ).first()
     if existing_user:
-        return jsonify({"error": "Benutzername oder E-Mail bereits vergeben"}), 409
+        return jsonify({"error": "E-Mail bereits vergeben"}), 409
 
-    hashed_password = generate_password_hash(data["password"])
+    hashed_password = generate_password_hash(password)
     role = data.get("role", "user")
     if role not in ["user", "master"]:
         return jsonify({"error": "Ungültige Rolle"}), 400
 
+    custom_fields = data.get("customFields", [])
+
     new_user = User(
-        username=data["username"],
-        email=data["email"],
+        username=email,  # Email als Username
+        email=email,     # Email als Email
         password_hash=hashed_password,
-        role=role
+        role=role,
+        custom_fields=custom_fields
     )
     db.session.add(new_user)
     db.session.commit()
 
-    return jsonify({"message": f"User {new_user.username} created", "id": new_user.id}), 201
+    return jsonify({
+        "message": f"User {new_user.email} created",
+        "user": {
+            "id": new_user.id,
+            "username": new_user.username,
+            "role": new_user.role,
+            "customFields": new_user.custom_fields or []
+        }
+    }), 201
 
 @admin_bp.route('/edit-user', methods=['PUT'])
 @jwt_required()
@@ -61,22 +79,45 @@ def admin_edit_user():
     if not user:
         return jsonify({"error": "User not found"}), 404
 
-    # Update erlaubter Felder
+    # Update username/email (they are the same)
     if "username" in data:
+        # Validate email format
+        if not "@" in data["username"] or not "." in data["username"]:
+            return jsonify({"error": "Ungültige E-Mail-Adresse"}), 400
+            
+        # Check if email is already taken by another user
+        existing_user = User.query.filter(
+            (User.username == data["username"]) & (User.id != user_id)
+        ).first()
+        if existing_user:
+            return jsonify({"error": "E-Mail bereits vergeben"}), 409
+            
         user.username = data["username"]
-    if "email" in data:
-        user.email = data["email"]
+        user.email = data["username"]  # Email is same as username
+
+    # Update role if valid
     if "role" in data and data["role"] in ["user", "master"]:
         user.role = data["role"]
 
-    # Neues Passwort aktualisieren, falls übergeben (Logik aus der Change Password Route)
+    # Update custom fields if provided
+    if "customFields" in data:
+        user.custom_fields = data["customFields"]
+
+    # Update password if provided
     new_password = data.get("new_password")
     if new_password:
         user.password_hash = generate_password_hash(new_password)
     
     db.session.commit()
-    return jsonify({"message": "User updated successfully"}), 200
-
+    return jsonify({
+        "message": "User updated successfully",
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "role": user.role,
+            "customFields": user.custom_fields or []
+        }
+    }), 200
 
 @admin_bp.route('/delete-user/<int:user_id>', methods=['DELETE'])
 @jwt_required()

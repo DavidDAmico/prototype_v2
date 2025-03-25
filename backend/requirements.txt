@@ -8,6 +8,7 @@ Flask-Cors==5.0.0
 flask-jwt-extended
 flask-swagger-ui==4.11.1
 flask-sqlalchemy
+flask-migrate==4.0.4
 gunicorn==23.0.0
 idna==3.8
 itsdangerous==2.2.0

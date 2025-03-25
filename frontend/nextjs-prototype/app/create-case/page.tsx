@@ -15,23 +15,17 @@ export default function CreateCasePage() {
 
   // Schritt im Wizard (1 bis 5)
   const [step, setStep] = useState(1);
+  const [completedSteps, setCompletedSteps] = useState<number[]>([]);
 
   // Schritt 1: Basis-Informationen
   const [caseName, setCaseName] = useState("");
   const [caseType, setCaseType] = useState<"intern" | "extern">("intern");
-  const [showEvaluation, setShowEvaluation] = useState(false);
 
   // Schritt 2: Experten – alle vorhandenen User
   const [allUsers, setAllUsers] = useState<User[]>([]);
-  const [selectedUserIds, setSelectedUserIds] = useState<number[]>([]);
-  const [userSearch, setUserSearch] = useState("");
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  // Gefilterte User basierend auf dem Suchbegriff
-  const filteredUsers = allUsers.filter((user) =>
-    user.username.toLowerCase().includes(userSearch.toLowerCase())
-  );
+  const [userSearchFields, setUserSearchFields] = useState<string[]>([""]);
+  const [selectedUsers, setSelectedUsers] = useState<{[key: number]: User | null}>({0: null});
+  const [dropdownOpenIndex, setDropdownOpenIndex] = useState<number | null>(null);
 
   // Schritt 3: Kriterien (dynamisch) – initial ein leeres Feld
   const [criteria, setCriteria] = useState<string[]>([""]);
@@ -42,7 +36,169 @@ export default function CreateCasePage() {
   const [isLoading, setIsLoading] = useState(false);
   const [projectId, setProjectId] = useState<number>(2); // Default to our created project ID
 
-  // User laden – alle User (auch Master)
+  // State für die Bestätigung der Daten
+  const [isDataConfirmed, setIsDataConfirmed] = useState(false);
+
+  // Prüfen ob ein Schritt komplett ist
+  const isStepComplete = (stepNumber: number) => {
+    switch (stepNumber) {
+      case 1:
+        return caseName.trim() !== "";
+      case 2:
+        return Object.values(selectedUsers).some(user => user !== null);
+      case 3:
+        return criteria.some(c => c.trim() !== "");
+      case 4:
+        return technologies.some(t => t.trim() !== "");
+      case 5:
+        return isDataConfirmed;
+      default:
+        return false;
+    }
+  };
+
+  // Prüfen ob alle Schritte komplett sind
+  const areAllStepsComplete = () => {
+    return [1, 2, 3, 4, 5].every(step => isStepComplete(step));
+  };
+
+  // Aktualisiere completed steps wenn sich relevante Daten ändern
+  useEffect(() => {
+    const newCompletedSteps = [1, 2, 3, 4, 5].filter(stepNum => isStepComplete(stepNum));
+    setCompletedSteps(newCompletedSteps);
+  }, [caseName, selectedUsers, criteria, technologies, isDataConfirmed]);
+
+  // Validierung für Schritte
+  const validateStep = (targetStep: number) => {
+    // Keine Validierung beim Springen zwischen den Schritten
+    return true;
+  };
+
+  // Validierung beim Speichern
+  const validateBeforeSave = () => {
+    const allStepsCompleted = [1, 2, 3, 4].every(stepNum => isStepComplete(stepNum));
+    if (!allStepsCompleted) {
+      alert("Bitte füllen Sie alle Pflichtfelder in allen Schritten aus");
+      return false;
+    }
+    return true;
+  };
+
+  // Navigation zwischen den Schritten
+  function goToStep(targetStep: number) {
+    setStep(targetStep);
+  }
+
+  function nextStep() {
+    setStep((prev) => Math.min(prev + 1, 5));
+  }
+
+  function prevStep() {
+    setStep((prev) => Math.max(prev - 1, 1));
+  }
+
+  // Dynamisches Hinzufügen/Entfernen von Experten
+  function addExpert() {
+    if (userSearchFields.length < 30) {
+      const newIndex = userSearchFields.length;
+      setUserSearchFields([...userSearchFields, ""]);
+      setSelectedUsers(prev => ({ ...prev, [newIndex]: null }));
+    }
+  }
+
+  // Experte aus einem Feld entfernen
+  const clearExpertSelection = (index: number) => {
+    setSelectedUsers(prev => ({ ...prev, [index]: null }));
+    setUserSearchFields(prev => {
+      const updated = [...prev];
+      updated[index] = "";
+      return updated;
+    });
+  };
+
+  // Experten-Feld komplett entfernen
+  const removeExpert = (index: number) => {
+    const newSearchFields = userSearchFields.filter((_, i) => i !== index);
+    setUserSearchFields(newSearchFields);
+
+    const newSelectedUsers: { [key: number]: User | null } = {};
+    Object.entries(selectedUsers).forEach(([key, value]) => {
+      const keyNum = parseInt(key);
+      if (keyNum < index) {
+        newSelectedUsers[keyNum] = value;
+      } else if (keyNum > index) {
+        newSelectedUsers[keyNum - 1] = value;
+      }
+    });
+    setSelectedUsers(newSelectedUsers);
+  };
+
+  function removeExpertField(index: number) {
+    if (index === 0) {
+      clearExpertSelection(index);
+    } else {
+      removeExpert(index);
+    }
+  }
+
+  function updateUserSearch(index: number, value: string) {
+    const newSearchFields = [...userSearchFields];
+    newSearchFields[index] = value;
+    setUserSearchFields(newSearchFields);
+    
+    // Nur Dropdown öffnen wenn es eine Sucheingabe gibt
+    if (value.trim()) {
+      setDropdownOpenIndex(index);
+    } else {
+      setDropdownOpenIndex(null);
+    }
+  }
+
+  function selectUser(index: number, user: User) {
+    setSelectedUsers(prev => ({ ...prev, [index]: user }));
+    // Setze den Suchtext auf den Usernamen
+    const newSearchFields = [...userSearchFields];
+    newSearchFields[index] = user.username;
+    setUserSearchFields(newSearchFields);
+    // Schließe das Dropdown
+    setDropdownOpenIndex(null);
+  }
+
+  // Kriterium aus einem Feld entfernen
+  const clearCriterion = (index: number) => {
+    const updated = [...criteria];
+    updated[index] = "";
+    setCriteria(updated);
+  };
+
+  // Kriterium-Feld komplett entfernen
+  const removeCriterion = (index: number) => {
+    if (index === 0) {
+      clearCriterion(index);
+    } else {
+      const updated = criteria.filter((_, i) => i !== index);
+      setCriteria(updated);
+    }
+  };
+
+  // Technologie aus einem Feld entfernen
+  const clearTechnology = (index: number) => {
+    const updated = [...technologies];
+    updated[index] = "";
+    setTechnologies(updated);
+  };
+
+  // Technologie-Feld komplett entfernen
+  const removeTechnology = (index: number) => {
+    if (index === 0) {
+      clearTechnology(index);
+    } else {
+      const updated = technologies.filter((_, i) => i !== index);
+      setTechnologies(updated);
+    }
+  };
+
+  // Fetch users when component mounts
   useEffect(() => {
     async function fetchUsers() {
       try {
@@ -51,9 +207,11 @@ export default function CreateCasePage() {
         });
         if (!res.ok) throw new Error("Fehler beim Laden der User");
         const data = await res.json();
-        setAllUsers(data.users);
+        // Stelle sicher, dass wir das users Array aus der Response verwenden
+        setAllUsers(Array.isArray(data.users) ? data.users : []);
       } catch (error: any) {
-        console.error(error.message);
+        console.error("Fehler beim Laden der User:", error.message);
+        setAllUsers([]); // Setze leeres Array im Fehlerfall
       }
     }
     fetchUsers();
@@ -87,37 +245,11 @@ export default function CreateCasePage() {
     fetchProjects();
   }, []);
 
-  // Schließt das Dropdown, wenn außerhalb geklickt wird
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node)
-      ) {
-        setDropdownOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () =>
-      document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  // Navigation zwischen den Schritten
-  function nextStep() {
-    setStep((prev) => Math.min(prev + 1, 5));
-  }
-  function prevStep() {
-    setStep((prev) => Math.max(prev - 1, 1));
-  }
-
   // Dynamisches Hinzufügen/Entfernen von Kriterien
   function addCriterion() {
     if (criteria.length < 30) {
       setCriteria([...criteria, ""]);
     }
-  }
-  function removeCriterion(index: number) {
-    setCriteria(criteria.filter((_, i) => i !== index));
   }
 
   // Dynamisches Hinzufügen/Entfernen von Technologien
@@ -126,24 +258,36 @@ export default function CreateCasePage() {
       setTechnologies([...technologies, ""]);
     }
   }
-  function removeTechnology(index: number) {
-    setTechnologies(technologies.filter((_, i) => i !== index));
-  }
 
   // Abschicken: Case speichern (nur die vom Backend erwarteten Felder)
-  async function handleSubmit() {
+  const handleSubmit = async () => {
+    if (!validateBeforeSave()) {
+      return;
+    }
+
     const mappedCaseType = caseType === "intern" ? "internal" : "external";
 
     const validCriteria = criteria.filter(c => c.trim() !== "").map(c => c);  // Send only non-empty criterion names
     const validTechnologies = technologies.filter(t => t.trim() !== "").map(t => t);  // Send only non-empty technology names
 
+    // Get all selected users' IDs
+    const selectedUsersList = Object.values(selectedUsers).filter((user): user is User => user !== null);
+    const selectedUserIds = selectedUsersList.map(user => user.id);
+    
+    // Get the assigned user ID (first selected user)
+    const assignedUserId = selectedUserIds[0];
+    console.log("Selected users:", selectedUsersList);
+    console.log("Assigning case to user:", assignedUserId);
+
     const payload = {
       project_id: projectId,
       case_type: mappedCaseType,
-      show_results: showEvaluation,
+      show_results: false,
       criteria: validCriteria,
       technologies: validTechnologies,
-      name: caseName.trim() || undefined // Only include if not empty
+      name: caseName.trim(),
+      assigned_user_id: assignedUserId,
+      selected_users: selectedUserIds
     };
 
     console.log("Erstelle Case mit Payload:", payload);
@@ -160,8 +304,12 @@ export default function CreateCasePage() {
       if (!res.ok) {
         throw new Error("Fehler beim Erstellen des Cases");
       }
-      alert("Case wurde erfolgreich erstellt!");
-      router.push("/admin");
+      
+      // Get the response data to check the actual project ID used
+      const data = await res.json();
+      console.log("Case created successfully:", data);
+      
+      router.push("/success?action=createCase");
     } catch (error: any) {
       console.error(error.message);
       alert("Fehler beim Speichern des Cases. Siehe Konsole.");
@@ -169,7 +317,7 @@ export default function CreateCasePage() {
   }
 
   return (
-    <div className="fixed-blue-frame bg-blue-100 dark:bg-blue-200 p-6 rounded-lg space-y-6 text-black">
+    <div className="fixed-blue-frame bg-white dark:bg-blue-950/30 p-6 rounded-lg space-y-6 text-black">
       <h2 className="text-2xl font-bold text-center">Case-Erstellung</h2>
 
       {/* Schrittanzeige */}
@@ -177,9 +325,12 @@ export default function CreateCasePage() {
         {[1, 2, 3, 4, 5].map((num) => (
           <div
             key={num}
-            className={`w-8 h-8 rounded-full flex items-center justify-center ${
+            onClick={() => goToStep(num)}
+            className={`w-8 h-8 rounded-full flex items-center justify-center cursor-pointer ${
               step === num
                 ? "bg-blue-600 text-white"
+                : completedSteps.includes(num)
+                ? "bg-green-500 text-white"
                 : "bg-gray-300 text-black"
             }`}
           >
@@ -190,300 +341,396 @@ export default function CreateCasePage() {
 
       {step === 1 && (
         <div className="space-y-4">
-          <p className="font-semibold">Schritt 1: Basis-Informationen</p>
-          <div>
-            <label className="block text-sm font-medium mb-1">
-              Case Name (optional):
-            </label>
-            <input
-              type="text"
-              value={caseName}
-              onChange={(e) => setCaseName(e.target.value)}
-              className="w-full p-2 rounded border border-gray-300"
-              placeholder="z.B. 'Marktstudie Q4'"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Case-Typ:</label>
-            <div className="flex gap-4">
-              <label className="flex items-center gap-1">
+          <div className="bg-blue-100 dark:bg-blue-950/30 rounded-lg shadow-sm border border-blue-200 dark:border-blue-900/40 p-6">
+            <p className="font-semibold mb-6">Schritt 1: Basis-Informationen</p>
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="caseName" className="block text-sm font-medium text-gray-700 mb-1">
+                  Case Name
+                </label>
                 <input
-                  type="radio"
-                  value="intern"
-                  checked={caseType === "intern"}
-                  onChange={() => setCaseType("intern")}
+                  type="text"
+                  id="caseName"
+                  value={caseName}
+                  onChange={(e) => setCaseName(e.target.value)}
+                  className="w-full p-2 rounded border border-gray-300"
+                  placeholder="Name des Cases eingeben"
                 />
-                Intern
-              </label>
-              <label className="flex items-center gap-1">
-                <input
-                  type="radio"
-                  value="extern"
-                  checked={caseType === "extern"}
-                  onChange={() => setCaseType("extern")}
-                />
-                Extern
-              </label>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Case Typ
+                </label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      checked={caseType === "intern"}
+                      onChange={() => setCaseType("intern")}
+                      className="text-blue-600"
+                    />
+                    Intern
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      checked={caseType === "extern"}
+                      onChange={() => setCaseType("extern")}
+                      className="text-blue-600"
+                    />
+                    Extern
+                  </label>
+                </div>
+              </div>
             </div>
-          </div>
-          <div>
-            <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={showEvaluation}
-                onChange={(e) => setShowEvaluation(e.target.checked)}
-              />
-              <span>Auswertung anzeigen?</span>
-            </label>
           </div>
         </div>
       )}
 
       {step === 2 && (
-        <div className="space-y-4" ref={dropdownRef}>
-          <p className="font-semibold">Schritt 2: Experten auswählen</p>
-          <p>Wähle die User, die an diesem Case teilnehmen sollen.</p>
-          {/* Custom Multi-Select Dropdown */}
-          <div className="relative">
-            <div
-              className="border rounded p-2 cursor-pointer"
-              onClick={() => setDropdownOpen((prev) => !prev)}
-            >
-              {selectedUserIds.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {selectedUserIds.map((id) => {
-                    const user = allUsers.find((u) => u.id === id);
-                    return (
-                      <div
-                        key={id}
-                        className="bg-blue-200 text-blue-800 px-2 py-1 rounded"
-                      >
-                        {user ? user.username : id}
+        <div className="space-y-4">
+          <div className="bg-blue-100 dark:bg-blue-950/30 rounded-lg shadow-sm border border-blue-200 dark:border-blue-900/40 p-6">
+            <div className="flex justify-between items-center mb-6">
+              <p className="font-semibold">Schritt 2: Experten auswählen</p>
+              <div className="flex items-center text-sm text-gray-600 dark:text-gray-300">
+                <span className="font-medium">
+                  {Object.values(selectedUsers).filter(user => user !== null).length}
+                </span>
+                <span className="mx-1">/</span>
+                <span>30 Experten</span>
+              </div>
+            </div>
+            <div className="space-y-4">
+              {userSearchFields.map((searchValue, index) => (
+                <div key={index} className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      value={searchValue}
+                      onChange={(e) => updateUserSearch(index, e.target.value)}
+                      className="w-full p-2 rounded border border-gray-300"
+                      placeholder="Experte suchen..."
+                    />
+                    {dropdownOpenIndex === index && searchValue && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded shadow-lg max-h-48 overflow-y-auto">
+                        {allUsers
+                          .filter(user =>
+                            user.username.toLowerCase().includes(searchValue.toLowerCase())
+                          )
+                          .map(user => (
+                            <div
+                              key={user.id}
+                              className="p-2 hover:bg-gray-100 cursor-pointer"
+                              onClick={() => {
+                                selectUser(index, user);
+                              }}
+                            >
+                              {user.username}
+                            </div>
+                          ))}
                       </div>
-                    );
-                  })}
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeExpertField(index)}
+                    className="custom-action-button flex items-center justify-center p-2 rounded-lg bg-white text-black transition hover:bg-red-500 hover:text-white"
+                  >
+                    <Image
+                      src="/icons/delete.png"
+                      alt="Remove"
+                      width={16}
+                      height={16}
+                    />
+                  </button>
                 </div>
-              ) : (
-                <span className="text-gray-500">Experten auswählen...</span>
+              ))}
+              {userSearchFields.length < 30 && (
+                <button
+                  type="button"
+                  onClick={addExpert}
+                  className="custom-action-button flex items-center gap-2 justify-center p-2 rounded-lg bg-white text-black transition hover:bg-green-500 hover:text-white"
+                >
+                  <Image
+                    src="/icons/add-user.png"
+                    alt="Add"
+                    width={16}
+                    height={16}
+                  />
+                  <span>User hinzufügen</span>
+                </button>
               )}
             </div>
-            {dropdownOpen && (
-              <div className="absolute z-10 mt-1 w-full border rounded bg-white">
-                <input
-                  type="text"
-                  placeholder="User suchen..."
-                  value={userSearch}
-                  onChange={(e) => setUserSearch(e.target.value)}
-                  className="w-full p-2 border-b"
-                />
-                <ul className="max-h-60 overflow-y-auto">
-                  {filteredUsers.map((user) => (
-                    <li
-                      key={user.id}
-                      className="p-2 hover:bg-gray-100 cursor-pointer"
-                      onClick={() => {
-                        // Toggle selection
-                        if (selectedUserIds.includes(user.id)) {
-                          setSelectedUserIds(
-                            selectedUserIds.filter((id) => id !== user.id)
-                          );
-                        } else {
-                          setSelectedUserIds([...selectedUserIds, user.id]);
-                        }
-                      }}
-                    >
-                      {user.username} (ID: {user.id})
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
           </div>
         </div>
       )}
 
       {step === 3 && (
         <div className="space-y-4">
-          <p className="font-semibold">Schritt 3: Kriterien</p>
-          <div className="space-y-2">
-            {criteria.map((crit, index) => (
-              <div key={index} className="flex items-center gap-2">
-                <input
-                  type="text"
-                  placeholder={`Kriterium #${index + 1}`}
-                  value={crit}
-                  onChange={(e) => {
-                    const updated = [...criteria];
-                    updated[index] = e.target.value;
-                    setCriteria(updated);
-                  }}
-                  className="p-2 rounded border border-gray-300 flex-1"
-                />
+          <div className="bg-blue-100 dark:bg-blue-950/30 rounded-lg shadow-sm border border-blue-200 dark:border-blue-900/40 p-6">
+            <div className="flex justify-between items-center mb-6">
+              <p className="font-semibold">Schritt 3: Kriterien</p>
+              <div className="flex items-center text-sm text-gray-600 dark:text-gray-300">
+                <span className="font-medium">
+                  {criteria.filter(c => c.trim() !== "").length}
+                </span>
+                <span className="mx-1">/</span>
+                <span>30 Kriterien</span>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {criteria.map((crit, index) => (
+                <div key={index} className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    placeholder={`Kriterium #${index + 1}`}
+                    value={crit}
+                    onChange={(e) => {
+                      const updated = [...criteria];
+                      updated[index] = e.target.value;
+                      setCriteria(updated);
+                    }}
+                    className="p-2 rounded border border-gray-300 flex-1"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeCriterion(index)}
+                    className="custom-action-button flex items-center justify-center p-2 rounded-lg bg-white text-black transition hover:bg-red-500 hover:text-white"
+                  >
+                    <Image
+                      src="/icons/delete.png"
+                      alt="Remove"
+                      width={16}
+                      height={16}
+                    />
+                  </button>
+                </div>
+              ))}
+              {criteria.length < 30 && (
                 <button
                   type="button"
-                  onClick={() => removeCriterion(index)}
-                  className="custom-action-button flex items-center justify-center p-2 rounded-lg bg-white text-black transition hover:bg-red-500 hover:text-white"
+                  onClick={addCriterion}
+                  className="custom-action-button flex items-center gap-2 justify-center p-2 rounded-lg bg-white text-black transition hover:bg-green-500 hover:text-white"
                 >
                   <Image
-                    src="/icons/delete.png"
-                    alt="Remove"
+                    src="/icons/create-case.png"
+                    alt="Add"
                     width={16}
                     height={16}
                   />
+                  <span>Kriterium hinzufügen</span>
                 </button>
-              </div>
-            ))}
+              )}
+            </div>
           </div>
-          {criteria.length < 30 && (
-            <button
-              type="button"
-              onClick={addCriterion}
-              className="custom-action-button flex items-center justify-center p-2 rounded-lg bg-white text-black transition hover:bg-green-500 hover:text-white"
-              title="Kriterium hinzufügen"
-            >
-              <Image
-                src="/icons/create-case.png"
-                alt="Add Criterion"
-                width={16}
-                height={16}
-              />
-            </button>
-          )}
         </div>
       )}
 
       {step === 4 && (
         <div className="space-y-4">
-          <p className="font-semibold">Schritt 4: Technologien</p>
-          <div className="space-y-2">
-            {technologies.map((tech, index) => (
-              <div key={index} className="flex items-center gap-2">
-                <input
-                  type="text"
-                  placeholder={`Technologie #${index + 1}`}
-                  value={tech}
-                  onChange={(e) => {
-                    const updated = [...technologies];
-                    updated[index] = e.target.value;
-                    setTechnologies(updated);
-                  }}
-                  className="p-2 rounded border border-gray-300 flex-1"
-                />
+          <div className="bg-blue-100 dark:bg-blue-950/30 rounded-lg shadow-sm border border-blue-200 dark:border-blue-900/40 p-6">
+            <div className="flex justify-between items-center mb-6">
+              <p className="font-semibold">Schritt 4: Technologien</p>
+              <div className="flex items-center text-sm text-gray-600 dark:text-gray-300">
+                <span className="font-medium">
+                  {technologies.filter(t => t.trim() !== "").length}
+                </span>
+                <span className="mx-1">/</span>
+                <span>30 Technologien</span>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {technologies.map((tech, index) => (
+                <div key={index} className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    placeholder={`Technologie #${index + 1}`}
+                    value={tech}
+                    onChange={(e) => {
+                      const updated = [...technologies];
+                      updated[index] = e.target.value;
+                      setTechnologies(updated);
+                    }}
+                    className="p-2 rounded border border-gray-300 flex-1"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeTechnology(index)}
+                    className="custom-action-button flex items-center justify-center p-2 rounded-lg bg-white text-black transition hover:bg-red-500 hover:text-white"
+                  >
+                    <Image
+                      src="/icons/delete.png"
+                      alt="Remove"
+                      width={16}
+                      height={16}
+                    />
+                  </button>
+                </div>
+              ))}
+              {technologies.length < 30 && (
                 <button
                   type="button"
-                  onClick={() => removeTechnology(index)}
-                  className="custom-action-button flex items-center justify-center p-2 rounded-lg bg-white text-black transition hover:bg-red-500 hover:text-white"
-                  title="Technologie entfernen"
+                  onClick={addTechnology}
+                  className="custom-action-button flex items-center gap-2 justify-center p-2 rounded-lg bg-white text-black transition hover:bg-green-500 hover:text-white"
                 >
                   <Image
-                    src="/icons/delete.png"
-                    alt="Remove"
+                    src="/icons/create-case.png"
+                    alt="Add"
                     width={16}
                     height={16}
                   />
+                  <span>Technologie hinzufügen</span>
                 </button>
-              </div>
-            ))}
+              )}
+            </div>
           </div>
-          {technologies.length < 30 && (
-            <button
-              type="button"
-              onClick={addTechnology}
-              className="custom-action-button flex items-center justify-center p-2 rounded-lg bg-white text-black transition hover:bg-green-500 hover:text-white"
-              title="Technologie hinzufügen"
-            >
-              <Image
-                src="/icons/create-case.png"
-                alt="Add Technology"
-                width={16}
-                height={16}
-              />
-            </button>
-          )}
         </div>
       )}
 
       {step === 5 && (
         <div className="space-y-4">
-          <p className="font-semibold">Schritt 5: Übersicht &amp; Speichern</p>
-          <div className="bg-white p-4 rounded shadow space-y-2">
-            <p>
-              <strong>Case Name:</strong> {caseName || "(kein Name)"}
-            </p>
-            <p>
-              <strong>Typ:</strong> {caseType}
-            </p>
-            <p>
-              <strong>Auswertung anzeigen:</strong>{" "}
-              {showEvaluation ? "Ja" : "Nein"}
-            </p>
-            <p>
-              <strong>Experten:</strong>{" "}
-              {selectedUserIds.length > 0
-                ? selectedUserIds.join(", ")
-                : "(keine)"}
-            </p>
-            <p>
-              <strong>Kriterien:</strong>{" "}
-              {criteria.length > 0 ? criteria.join(", ") : "(keine)"}
-            </p>
-            <p>
-              <strong>Technologien:</strong>{" "}
-              {technologies.length > 0 ? technologies.join(", ") : "(keine)"}
-            </p>
-          </div>
-          <p className="text-gray-700">
-            Wenn alles passt, klicke auf <em>Speichern</em>.
-          </p>
-          <div className="flex justify-center">
-            <button
-              onClick={handleSubmit}
-              className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded transition"
-              title="Case speichern"
-            >
-              Speichern
-            </button>
+          <div className="bg-blue-100 dark:bg-blue-950/30 rounded-lg shadow-sm border border-blue-200 dark:border-blue-900/40 p-6">
+            <p className="font-semibold mb-6">Schritt 5: Zusammenfassung</p>
+            
+            <div className="grid grid-cols-2 gap-4">
+              {/* Case Information Frame */}
+              <div className="bg-blue-100 dark:bg-blue-950/30 rounded-lg shadow-sm border border-blue-200 dark:border-blue-900/40 p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-medium">Case Information</h3>
+                  {isStepComplete(1) && (
+                    <span className="text-green-500">✓</span>
+                  )}
+                </div>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">Name:</span>
+                    <span className="font-medium">{caseName}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">Typ:</span>
+                    <span className="font-medium capitalize">{caseType}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Experts Frame */}
+              <div className="bg-blue-100 dark:bg-blue-950/30 rounded-lg shadow-sm border border-blue-200 dark:border-blue-900/40 p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-medium">Experten</h3>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-sm ${isStepComplete(2) ? "text-green-500" : "text-gray-600 dark:text-gray-400"}`}>
+                      {Object.values(selectedUsers).filter(user => user !== null).length}/30
+                    </span>
+                    {isStepComplete(2) && (
+                      <span className="text-green-500">✓</span>
+                    )}
+                  </div>
+                </div>
+                <div className="space-y-1 text-sm">
+                  {Object.values(selectedUsers)
+                    .filter(user => user !== null)
+                    .map((user, index) => (
+                      <div key={index} className="flex items-center gap-2">
+                        <span className="text-gray-600 dark:text-gray-400">{index + 1}.</span>
+                        <span>{user?.username}</span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+
+              {/* Technologies Frame */}
+              <div className="bg-blue-100 dark:bg-blue-950/30 rounded-lg shadow-sm border border-blue-200 dark:border-blue-900/40 p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-medium">Technologien</h3>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-sm ${isStepComplete(4) ? "text-green-500" : "text-gray-600 dark:text-gray-400"}`}>
+                      {technologies.filter(t => t.trim() !== "").length}/30
+                    </span>
+                    {isStepComplete(4) && (
+                      <span className="text-green-500">✓</span>
+                    )}
+                  </div>
+                </div>
+                <div className="space-y-1 text-sm">
+                  {technologies
+                    .filter(tech => tech.trim() !== "")
+                    .map((tech, index) => (
+                      <div key={index} className="flex items-center gap-2">
+                        <span className="text-gray-600 dark:text-gray-400">{index + 1}.</span>
+                        <span>{tech}</span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+
+              {/* Criteria Frame */}
+              <div className="bg-blue-100 dark:bg-blue-950/30 rounded-lg shadow-sm border border-blue-200 dark:border-blue-900/40 p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-medium">Kriterien</h3>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-sm ${isStepComplete(3) ? "text-green-500" : "text-gray-600 dark:text-gray-400"}`}>
+                      {criteria.filter(c => c.trim() !== "").length}/30
+                    </span>
+                    {isStepComplete(3) && (
+                      <span className="text-green-500">✓</span>
+                    )}
+                  </div>
+                </div>
+                <div className="space-y-1 text-sm">
+                  {criteria
+                    .filter(crit => crit.trim() !== "")
+                    .map((crit, index) => (
+                      <div key={index} className="flex items-center gap-2">
+                        <span className="text-gray-600 dark:text-gray-400">{index + 1}.</span>
+                        <span>{crit}</span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+
+              {/* Confirmation Checkbox - spans full width */}
+              <div className="col-span-2 mt-6">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isDataConfirmed}
+                    onChange={(e) => setIsDataConfirmed(e.target.checked)}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span>Ich bestätige, dass alle eingegebenen Daten korrekt sind</span>
+                </label>
+              </div>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Navigation zwischen den Schritten als Action-Buttons */}
+      {/* Navigation */}
       <div className="flex justify-between mt-6">
-        <div className="flex items-center">
-          {step > 1 ? (
-            <button
-              onClick={prevStep}
-              className="custom-action-button flex items-center justify-center p-2 rounded-lg bg-white text-blue-600 transition hover:bg-blue-600 hover:text-white"
-              title="Vorheriger Schritt"
-            >
-              <Image
-                src="/icons/left-arrow.png"
-                alt="Back"
-                width={20}
-                height={20}
-              />
-            </button>
-          ) : (
-            // Platzhalter, damit der Next-Button rechts ausgerichtet bleibt
-            <div className="w-10" />
-          )}
-        </div>
-        <div className="flex items-center">
-          {step < 5 && (
-            <button
-              onClick={nextStep}
-              className="custom-action-button flex items-center justify-center p-2 rounded-lg bg-white text-blue-600 transition hover:bg-blue-600 hover:text-white"
-              title="Nächster Schritt"
-            >
-              <Image
-                src="/icons/right-arrow.png"
-                alt="Next"
-                width={20}
-                height={20}
-              />
-            </button>
-          )}
-        </div>
+        <button
+          type="button"
+          onClick={prevStep}
+          className={`px-4 py-2 rounded ${
+            step === 1
+              ? "bg-gray-300 cursor-not-allowed"
+              : "bg-blue-500 hover:bg-blue-600 text-white"
+          }`}
+          disabled={step === 1}
+        >
+          Zurück
+        </button>
+        <button
+          type="button"
+          onClick={step === 5 && areAllStepsComplete() ? handleSubmit : nextStep}
+          disabled={!isStepComplete(step)}
+          className={`px-4 py-2 rounded ${
+            !isStepComplete(step)
+              ? "bg-gray-300 cursor-not-allowed"
+              : "bg-blue-500 hover:bg-blue-600 text-white"
+          }`}
+        >
+          {step === 5 ? "Case erstellen" : "Weiter"}
+        </button>
       </div>
     </div>
   );

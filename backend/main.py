@@ -3,7 +3,28 @@ from flask import Flask
 from flask_jwt_extended import JWTManager
 from flask_cors import CORS
 from config.config import config
-from src.models import db, TokenBlacklist  # TokenBlacklist importiert für die Blocklist-Callback
+from src.models import db, TokenBlacklist, User
+from werkzeug.security import generate_password_hash
+from flask_migrate import Migrate
+
+def create_master_user(app):
+    with app.app_context():
+        # Check if master user already exists
+        master_user = User.query.filter_by(username="master@example.com").first()
+        if not master_user:
+            # Create master user
+            hashed_password = generate_password_hash("master")
+            master_user = User(
+                username="master@example.com",
+                email="master@example.com",
+                password_hash=hashed_password,
+                role="master"
+            )
+            db.session.add(master_user)
+            db.session.commit()
+            print("Master user created successfully")
+        else:
+            print("Master user already exists")
 
 def create_app():
     app = Flask(__name__)
@@ -26,19 +47,6 @@ def create_app():
     # CSRF-Schutz für Cookies – hier aktivieren
     app.config["JWT_COOKIE_CSRF_PROTECT"] = True
 
-    # SQLAlchemy mit der Flask-App verbinden
-    db.init_app(app)
-
-    # Initialisiere JWTManager
-    jwt = JWTManager(app)
-
-    # Callback für Token-Blacklist (Token werden hier geprüft, wenn sie in der DB stehen)
-    @jwt.token_in_blocklist_loader
-    def check_if_token_revoked(jwt_header, jwt_payload):
-        jti = jwt_payload["jti"]
-        token = TokenBlacklist.query.filter_by(jti=jti).first()
-        return token is not None
-
     # CORS konfigurieren – Frontend und Backend URLs zulassen
     CORS(app, 
          supports_credentials=True, 
@@ -52,18 +60,34 @@ def create_app():
              }
          })
 
+    # SQLAlchemy mit der Flask-App verbinden
+    db.init_app(app)
+    
+    # Flask-Migrate initialisieren
+    migrate = Migrate(app, db)
+
+    # Initialisiere JWTManager
+    jwt = JWTManager(app)
+
+    # Callback für Token-Blacklist (Token werden hier geprüft, wenn sie in der DB stehen)
+    @jwt.token_in_blocklist_loader
+    def check_if_token_revoked(jwt_header, jwt_payload):
+        jti = jwt_payload["jti"]
+        token = TokenBlacklist.query.filter_by(jti=jti).first()
+        return token is not None
+
     # Blueprint-Registrierung (API-Routen)
     from src.routes.auth import auth_bp
     from src.routes.projects import projects_bp
     from src.routes.cases import cases_bp
-    from src.routes.admin import admin_bp  # Admin-Blueprint importieren
+    from src.routes.admin import admin_bp  
     from src.routes.criteria import criteria_bp
     from src.routes.technologies import technologies_bp
 
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(projects_bp, url_prefix='/projects')
-    app.register_blueprint(cases_bp, url_prefix='/cases')  # Keep this without trailing slash
-    app.register_blueprint(admin_bp, url_prefix='/admin')  # Admin-Endpoints unter /admin
+    app.register_blueprint(cases_bp, url_prefix='/cases')  
+    app.register_blueprint(admin_bp, url_prefix='/admin')  
     app.register_blueprint(criteria_bp, url_prefix='/criteria')
     app.register_blueprint(technologies_bp, url_prefix='/technologies')
 
@@ -73,6 +97,8 @@ def create_app():
     # Erstelle die Datenbank-Tabellen beim Start
     with app.app_context():
         db.create_all()
+        # Create master user after database initialization
+        create_master_user(app)
 
     return app
 

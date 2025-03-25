@@ -19,40 +19,74 @@ auth_bp = Blueprint('auth', __name__)
 @auth_bp.route('/register', methods=['POST'])
 def register():
     data = request.get_json()
-    if not data.get("username") or not data.get("email") or not data.get("password"):
-        return jsonify({"error": "Username, Email und Passwort sind erforderlich"}), 400
+    email = data.get("username")  # Email wird als Username verwendet
+    password = data.get("password")
 
-    # Prüfen, ob Benutzername oder E-Mail bereits existiert
-    existing_user = User.query.filter((User.username == data["username"]) | (User.email == data["email"])).first()
+    if not email or not password:
+        return jsonify({"error": "Email und Passwort sind erforderlich"}), 400
+
+    # Validate email format
+    if not "@" in email or not "." in email:
+        return jsonify({"error": "Ungültige E-Mail-Adresse"}), 400
+
+    # Prüfen, ob E-Mail bereits existiert
+    existing_user = User.query.filter(
+        (User.username == email) | (User.email == email)
+    ).first()
     if existing_user:
-        return jsonify({"error": "Benutzername oder E-Mail bereits vergeben"}), 409
+        return jsonify({"error": "E-Mail bereits vergeben"}), 409
 
-    hashed_password = generate_password_hash(data["password"])
+    hashed_password = generate_password_hash(password)
     role = data.get("role", "user")
     if role not in ["user", "master"]:
         return jsonify({"error": "Ungültige Rolle"}), 400
 
-    new_user = User(username=data["username"], email=data["email"], password_hash=hashed_password, role=role)
+    custom_fields = data.get("customFields", [])
+
+    new_user = User(
+        username=email,  # Email als Username
+        email=email,     # Email als Email
+        password_hash=hashed_password,
+        role=role,
+        custom_fields=custom_fields
+    )
     db.session.add(new_user)
     db.session.commit()
 
-    return jsonify({"message": f"Benutzer {new_user.username} erfolgreich registriert!", "role": new_user.role}), 201
+    return jsonify({
+        "message": f"Benutzer {new_user.email} erfolgreich registriert!",
+        "user": {
+            "id": new_user.id,
+            "username": new_user.username,
+            "role": new_user.role,
+            "customFields": new_user.custom_fields or []
+        }
+    }), 201
 
 # ✅ Login-Endpoint – setzt Access- und Refresh-Token als HttpOnly-Cookies
 @auth_bp.route('/login', methods=['POST'])
 def login():
     data = request.get_json()
-    user = User.query.filter_by(username=data.get('username')).first()
+    email = data.get('username')  # Email wird als Username verwendet
+    user = User.query.filter((User.username == email) | (User.email == email)).first()
     if not user or not check_password_hash(user.password_hash, data.get('password')):
         return jsonify({"error": "Invalid credentials"}), 401
 
     access_token = create_access_token(identity={"user_id": user.id, "role": user.role})
     refresh_token = create_refresh_token(identity={"user_id": user.id, "role": user.role})
 
-    response = jsonify({"message": "Login successful"})
-    # Setze beide Tokens als sichere Cookies
+    response = jsonify({
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "role": user.role,
+            "customFields": user.custom_fields or []
+        }
+    })
+    
     set_access_cookies(response, access_token)
     set_refresh_cookies(response, refresh_token)
+    
     return response, 200
 
 # ✅ Token-Refresh über das HttpOnly Refresh-Cookie
@@ -107,10 +141,12 @@ def get_users():
         return jsonify({"error": "Access forbidden"}), 403
     users = User.query.all()
     return jsonify({
-        "users": [
-            {"id": user.id, "username": user.username, "email": user.email, "role": user.role}
-            for user in users
-        ]
+        "users": [{
+            "id": user.id,
+            "username": user.username,
+            "role": user.role,
+            "customFields": user.custom_fields or []
+        } for user in users]
     }), 200
 
 # ✅ Endpoint, um Details eines einzelnen Nutzers abzurufen (nur für Master)
@@ -127,7 +163,7 @@ def get_user(user_id):
         "user": {
             "id": user.id,
             "username": user.username,
-            "email": user.email,
-            "role": user.role
+            "role": user.role,
+            "customFields": user.custom_fields or []
         }
     }), 200

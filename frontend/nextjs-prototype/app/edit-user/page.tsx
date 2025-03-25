@@ -6,9 +6,16 @@ import Image from "next/image";
 
 interface User {
   id: number;
-  username: string;
-  email: string;
+  username: string;  // This is the email
   role: string;
+  customFields: string[];
+}
+
+interface FormData {
+  username: string;  // This is the email
+  role: string;
+  customFields: string[];
+  newPassword: string;
 }
 
 export default function EditUserPage() {
@@ -16,7 +23,12 @@ export default function EditUserPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<number>(0);
   const [userData, setUserData] = useState<User | null>(null);
-  const [newPassword, setNewPassword] = useState(""); // Neues Passwort
+  const [formData, setFormData] = useState<FormData>({
+    username: "",  // This is the email
+    role: "",
+    customFields: [],
+    newPassword: ""
+  });
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [search, setSearch] = useState("");
@@ -66,7 +78,12 @@ export default function EditUserPage() {
           throw new Error("Fehler beim Laden der Benutzerdetails");
         const data = await res.json();
         setUserData(data.user);
-        setNewPassword(""); // Neues Passwortfeld zurücksetzen
+        setFormData({
+          username: data.user.username,
+          role: data.user.role,
+          customFields: data.user.customFields || [],
+          newPassword: ""
+        });
       } catch (err: any) {
         setError(err.message);
       }
@@ -79,55 +96,70 @@ export default function EditUserPage() {
     user.username.toLowerCase().includes(search.toLowerCase())
   );
 
-  // Schließt das Dropdown, wenn außerhalb geklickt wird
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node)
-      ) {
-        setDropdownOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () =>
-      document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  // Auswahl im Dropdown
-  const handleUserSelect = (user: User) => {
-    setUserData(null); // Alte Daten löschen
-    setSelectedUserId(user.id);
-    setDropdownOpen(false);
-    setSearch("");
-  };
-
-  // Änderungen im Formular übernehmen
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
-  ) => {
-    if (userData) {
-      setUserData({ ...userData, [e.target.name]: e.target.value });
+  // Click-Handler für das Dropdown
+  const handleClickOutside = (event: MouseEvent) => {
+    if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      setDropdownOpen(false);
     }
   };
 
-  // User speichern – komplette Nutzerdaten werden gesendet.
-  // Falls ein neues Passwort eingegeben wurde, wird es als "new_password" mitgegeben.
+  useEffect(() => {
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  const handleUserSelect = (userId: number) => {
+    setSelectedUserId(userId);
+    setDropdownOpen(false);
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    if (name.startsWith('customField')) {
+      const index = parseInt(name.replace('customField', ''));
+      const newCustomFields = [...formData.customFields];
+      newCustomFields[index] = value;
+      setFormData(prev => ({ ...prev, customFields: newCustomFields }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
+  };
+
+  const addCustomField = () => {
+    if (formData.customFields.length < 5) {
+      setFormData(prev => ({
+        ...prev,
+        customFields: [...prev.customFields, ""]
+      }));
+    }
+  };
+
+  const removeCustomField = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      customFields: prev.customFields.filter((_, i) => i !== index)
+    }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userData) return;
-    setError("");
-    setSuccess("");
+    if (!formData.username) {
+      setError("E-Mail-Adresse ist erforderlich");
+      return;
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.username)) {
+      setError("Bitte geben Sie eine gültige E-Mail-Adresse ein.");
+      return;
+    }
 
     try {
       const csrfToken = getCookie("csrf_access_token");
-      const payload = {
-        user_id: userData.id,
-        username: userData.username,
-        email: userData.email,
-        role: userData.role,
-        ...(newPassword && { new_password: newPassword }),
-      };
+
       const res = await fetch("http://localhost:9000/admin/edit-user", {
         method: "PUT",
         headers: {
@@ -135,16 +167,34 @@ export default function EditUserPage() {
           "X-CSRF-TOKEN": csrfToken || "",
         },
         credentials: "include",
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          user_id: selectedUserId,
+          username: formData.username,
+          role: formData.role,
+          new_password: formData.newPassword || undefined,
+          customFields: formData.customFields.filter(field => field.trim() !== "")
+        }),
       });
+
       if (!res.ok) {
-        const text = await res.text();
-        console.error("Fehlerhafte Antwort:", text);
-        throw new Error("Fehler beim Bearbeiten des Users.");
+        const data = await res.json();
+        throw new Error(data.error || "Fehler beim Aktualisieren des Users");
       }
+
       const data = await res.json();
-      setSuccess("Benutzerdaten erfolgreich aktualisiert!");
-      setTimeout(() => router.push("/admin"), 2000);
+      
+      // Aktualisiere die Benutzerliste und die Anzeige
+      const updatedUser: User = {
+        id: selectedUserId,
+        username: formData.username,
+        role: formData.role,
+        customFields: formData.customFields
+      };
+      setUserData(updatedUser);
+      setUsers(prev => prev.map(u => u.id === selectedUserId ? updatedUser : u));
+      
+      // Weiterleitung zur Success-Seite
+      router.push("/success?action=editUser");
     } catch (err: any) {
       setError(err.message);
     }
@@ -180,114 +230,183 @@ export default function EditUserPage() {
         setUserData(null);
         setSelectedUserId(0);
       }
+      // Weiterleitung zur Success-Seite
+      router.push("/success?action=deleteUser");
     } catch (err: any) {
       setError(err.message);
     }
   };
 
   return (
-    <div className="flex items-center justify-center">
-      <div className="fixed-blue-frame p-8 rounded-lg shadow-lg max-w-md">
-        <h2 className="text-2xl font-bold mb-4 text-center">
-          Benutzer bearbeiten / löschen
+    <div className="flex items-center justify-center p-4">
+      <div className="bg-blue-100 dark:bg-blue-200 p-8 rounded-lg shadow-lg w-full max-w-md">
+        <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100 text-center">
+          Benutzer bearbeiten
         </h2>
-        {error && <p className="mb-4 text-red-700 text-center">{error}</p>}
-        {success && <p className="mb-4 text-green-700 text-center">{success}</p>}
 
-        {/* Custom Dropdown zur Benutzerauswahl */}
-        <div className="relative mb-4" ref={dropdownRef}>
-          <label className="block text-sm font-medium">Benutzer auswählen:</label>
+        {/* User Selection Dropdown */}
+        <div className="relative mb-6" ref={dropdownRef}>
           <div
-            className="border rounded p-2 cursor-pointer"
-            onClick={() => setDropdownOpen((prev) => !prev)}
+            className="p-3 border rounded-lg bg-white cursor-pointer flex justify-between items-center"
+            onClick={() => setDropdownOpen(!dropdownOpen)}
           >
-            {selectedUserId !== 0 ? (
-              <span>
-                {users.find((u) => u.id === selectedUserId)?.username || "Ausgewählt"}
-              </span>
-            ) : (
-              <span className="text-gray-500">-- Bitte auswählen --</span>
-            )}
+            <span>{userData?.username || "Benutzer auswählen"}</span>
+            <svg
+              className={`w-5 h-5 transform transition-transform ${dropdownOpen ? "rotate-180" : ""}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 9l-7 7-7-7"
+              />
+            </svg>
           </div>
+
+          {/* Search input */}
           {dropdownOpen && (
-            <div className="absolute z-10 mt-1 w-full border rounded bg-white">
+            <div className="absolute z-10 w-full bg-white border rounded-lg mt-1 shadow-lg">
               <input
                 type="text"
-                placeholder="Benutzer suchen..."
+                placeholder="Suchen..."
+                className="w-full p-2 border-b"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full p-2 border-b"
               />
-              <ul className="max-h-60 overflow-y-auto">
+              <div className="max-h-48 overflow-y-auto">
                 {filteredUsers.map((user) => (
-                  <li
+                  <div
                     key={user.id}
                     className="p-2 hover:bg-gray-100 cursor-pointer"
-                    onClick={() => handleUserSelect(user)}
+                    onClick={() => handleUserSelect(user.id)}
                   >
-                    {user.username} (ID: {user.id})
-                  </li>
+                    {user.username}
+                  </div>
                 ))}
-              </ul>
+              </div>
             </div>
           )}
         </div>
 
-        {/* Formular zum Bearbeiten */}
-        {userData && (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium">
-                Username <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                name="username"
-                value={userData.username}
-                onChange={handleChange}
-                required
-                className="mt-1 block w-full bg-white text-gray-900 border p-2 rounded-md focus:ring-blue-300 focus:border-blue-300"
-              />
+        {error && (
+          <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+            {error}
+          </div>
+        )}
+
+        {success && (
+          <div className="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded">
+            {success}
+          </div>
+        )}
+
+        {selectedUserId !== 0 && (
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="space-y-4">
+              {/* Email field */}
+              <div>
+                <label className="block text-sm font-medium text-black">
+                  E-Mail <span className="text-red-600">*</span>
+                </label>
+                <input
+                  type="email"
+                  name="username"
+                  value={formData.username}
+                  onChange={handleChange}
+                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:ring-blue-500"
+                  required
+                />
+              </div>
+
+              {/* Role field */}
+              <div>
+                <label className="block text-sm font-medium text-black">
+                  Rolle
+                </label>
+                <select
+                  name="role"
+                  value={formData.role}
+                  onChange={handleChange}
+                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 focus:border-blue-500 focus:ring-blue-500"
+                >
+                  <option value="user">User</option>
+                  <option value="master">Master</option>
+                </select>
+              </div>
+
+              {/* New Password field */}
+              <div>
+                <label className="block text-sm font-medium text-black">
+                  Neues Passwort
+                </label>
+                <input
+                  type="password"
+                  name="newPassword"
+                  value={formData.newPassword}
+                  onChange={handleChange}
+                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:ring-blue-500"
+                  placeholder="Leer lassen für keine Änderung"
+                />
+              </div>
+
+              {/* Custom Fields Section */}
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <label className="block text-sm font-medium text-black">
+                    Zusätzliche Informationen
+                  </label>
+                  <span className="text-sm text-gray-500">
+                    {formData.customFields.filter(field => field.trim() !== "").length}/5 Felder
+                  </span>
+                </div>
+                {formData.customFields.map((field, index) => (
+                  <div key={index} className="flex gap-2">
+                    <input
+                      type="text"
+                      name={`customField${index}`}
+                      value={field}
+                      onChange={handleChange}
+                      placeholder={`Zusätzliche Information #${index + 1}`}
+                      className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:ring-blue-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeCustomField(index)}
+                      className="custom-action-button p-2 rounded-lg bg-white text-gray-700 hover:bg-red-500 hover:text-white transition border border-gray-300"
+                    >
+                      <Image
+                        src="/icons/delete.png"
+                        alt="Remove"
+                        width={16}
+                        height={16}
+                      />
+                    </button>
+                  </div>
+                ))}
+                {formData.customFields.length < 5 && (
+                  <button
+                    type="button"
+                    onClick={addCustomField}
+                    className="custom-action-button flex items-center gap-2 p-2 rounded-lg bg-white text-gray-700 hover:bg-green-500 hover:text-white transition border border-gray-300"
+                  >
+                    <div className="flex items-center">
+                      <Image
+                        src="/icons/create-case.png"
+                        alt="Add"
+                        width={16}
+                        height={16}
+                      />
+                      <span className="ml-2">Feld hinzufügen</span>
+                    </div>
+                  </button>
+                )}
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium">
-                Email <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="email"
-                name="email"
-                value={userData.email}
-                onChange={handleChange}
-                required
-                className="mt-1 block w-full bg-white text-gray-900 border p-2 rounded-md focus:ring-blue-300 focus:border-blue-300"
-              />
-            </div>
-            {/* Neues Passwort-Feld */}
-            <div>
-              <label className="block text-sm font-medium">
-                Neues Passwort (optional)
-              </label>
-              <input
-                type="password"
-                name="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                className="mt-1 block w-full bg-white text-gray-900 border p-2 rounded-md focus:ring-blue-300 focus:border-blue-300"
-                placeholder="Neues Passwort"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium">Rolle</label>
-              <select
-                name="role"
-                value={userData.role}
-                onChange={handleChange}
-                className="mt-1 block w-full bg-white text-gray-900 border p-2 rounded-md focus:ring-blue-300 focus:border-blue-300"
-              >
-                <option value="user">User</option>
-                <option value="master">Master</option>
-              </select>
-            </div>
+
             <div className="flex justify-center gap-4">
               {/* Speichern-Button */}
               <button
@@ -306,7 +425,7 @@ export default function EditUserPage() {
               {/* Löschen-Button */}
               <button
                 type="button"
-                onClick={() => handleDelete(userData.id)}
+                onClick={() => handleDelete(selectedUserId)}
                 className="custom-action-button flex items-center justify-center p-2 rounded-lg bg-white hover:bg-red-600 transition text-white"
                 title="Benutzer löschen"
               >
