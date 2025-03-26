@@ -145,51 +145,72 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Anzeige der Cases */}
-      <div className="max-w-6xl mt-10 w-full">
-        <h2 className="text-2xl font-bold mb-4">Dir zugewiesene Cases</h2>
-        {assignedCases.length === 0 ? (
-          <p className="text-gray-500">
-            Du hast aktuell keine zugewiesenen Cases.
-          </p>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {assignedCases.map((c) => (
-              <Link
-                key={c.id}
-                href={`/cases/${c.id}/edit`}
-                className="p-4 bg-gray-200 dark:bg-gray-700 rounded-lg shadow-lg text-center"
-              >
-                <p>Case ID: {c.id}</p>
-                <p>Typ: {c.case_type}</p>
-                <p>
-                  Erstellt: {new Date(c.created_at).toLocaleDateString("de-DE")}
-                </p>
-              </Link>
-            ))}
-          </div>
-        )}
+      <div className="max-w-6xl w-full mt-8">
+        {/* Assigned Cases */}
+        <div className="mb-8">
+          <h2 className="text-lg font-medium mb-4">Dir zugewiesene Cases</h2>
+          {assignedCases.length === 0 ? (
+            <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+              <p className="text-gray-500">
+                Du hast aktuell keine zugewiesenen Cases.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {assignedCases.map((case_) => (
+                <Link
+                  href={`/cases/${case_.id}/edit`}
+                  key={case_.id}
+                  className="block"
+                >
+                  <div className="bg-white p-4 rounded-lg shadow-sm hover:shadow-md transition-shadow border border-gray-100">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="font-medium">Case {case_.id}</span>
+                      <span className="text-sm text-blue-600 px-2 py-1 bg-blue-50 rounded">
+                        {case_.case_type}
+                      </span>
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      {new Date(case_.created_at).toLocaleDateString()}
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
 
-        <h2 className="text-2xl font-bold mt-10 mb-4">Case Historie</h2>
-        {caseHistory.length === 0 ? (
-          <p className="text-gray-500">Noch keine abgeschlossenen Cases.</p>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {caseHistory.map((c) => (
-              <div
-                key={c.id}
-                className="p-4 bg-gray-300 dark:bg-gray-600 rounded-lg shadow-lg"
-              >
-                <p>Case ID: {c.id}</p>
-                <p>Typ: {c.case_type}</p>
-                <p>
-                  Abgeschlossen:{" "}
-                  {new Date(c.created_at).toLocaleDateString("de-DE")}
-                </p>
-              </div>
-            ))}
-          </div>
-        )}
+        {/* Case History */}
+        <div>
+          <h2 className="text-lg font-medium mb-4">Case Historie</h2>
+          {caseHistory.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {caseHistory.map((case_) => (
+                <Link
+                  href={`/cases/${case_.id}/edit`}
+                  key={case_.id}
+                  className="block"
+                >
+                  <div className="bg-white p-4 rounded-lg shadow-sm hover:shadow-md transition-shadow border border-gray-100">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="font-medium">Case {case_.id}</span>
+                      <span className="text-sm text-blue-600 px-2 py-1 bg-blue-50 rounded">
+                        {case_.case_type}
+                      </span>
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      {new Date(case_.created_at).toLocaleDateString()}
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+              <p className="text-gray-500">Noch keine abgeschlossenen Cases.</p>
+            </div>
+          )}
+        </div>
       </div>
     </main>
   );
