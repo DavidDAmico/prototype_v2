@@ -18,18 +18,18 @@ export default function EditUserLayout({ children }: { children: React.ReactNode
             className="w-12 h-12"
           />
           <h1 className="text-3xl font-bold text-gray-900 dark:text-blue-400">
-            User bearbeiten
+            Edit User
           </h1>
         </div>
         <Link 
           href="/admin"
           className="flex items-center gap-3 rounded-lg bg-blue-600 dark:bg-blue-500 px-6 py-2 text-white text-sm font-medium transition hover:bg-blue-500 dark:hover:bg-blue-400 ml-auto"
         >
-          <span>Zurück zum Admin-Dashboard</span>
+          <span>Back to Admin Dashboard</span>
           <ArrowRightIcon className="w-5" />
         </Link>
       </div>
-      {/* Hauptinhalt */}
+      {/* Main Content */}
       <div className="w-full max-w-6xl mt-10">
         {children}
       </div>

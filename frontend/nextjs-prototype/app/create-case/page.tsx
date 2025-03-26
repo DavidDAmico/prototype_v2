@@ -78,7 +78,7 @@ export default function CreateCasePage() {
   const validateBeforeSave = () => {
     const allStepsCompleted = [1, 2, 3, 4].every(stepNum => isStepComplete(stepNum));
     if (!allStepsCompleted) {
-      alert("Bitte füllen Sie alle Pflichtfelder in allen Schritten aus");
+      alert("Please fill in all required fields in all steps");
       return false;
     }
     return true;
@@ -205,12 +205,12 @@ export default function CreateCasePage() {
         const res = await fetch("http://localhost:9000/auth/users", {
           credentials: "include",
         });
-        if (!res.ok) throw new Error("Fehler beim Laden der User");
+        if (!res.ok) throw new Error("Error loading users");
         const data = await res.json();
         // Stelle sicher, dass wir das users Array aus der Response verwenden
         setAllUsers(Array.isArray(data.users) ? data.users : []);
       } catch (error: any) {
-        console.error("Fehler beim Laden der User:", error.message);
+        console.error("Error loading users:", error.message);
         setAllUsers([]); // Setze leeres Array im Fehlerfall
       }
     }
@@ -290,7 +290,7 @@ export default function CreateCasePage() {
       selected_users: selectedUserIds
     };
 
-    console.log("Erstelle Case mit Payload:", payload);
+    console.log("Creating case with payload:", payload);
 
     try {
       const res = await fetch("http://localhost:9000/cases/", {
@@ -302,7 +302,7 @@ export default function CreateCasePage() {
         body: JSON.stringify(payload),
       });
       if (!res.ok) {
-        throw new Error("Fehler beim Erstellen des Cases");
+        throw new Error("Error creating case");
       }
       
       // Get the response data to check the actual project ID used
@@ -312,15 +312,15 @@ export default function CreateCasePage() {
       router.push("/success?action=createCase");
     } catch (error: any) {
       console.error(error.message);
-      alert("Fehler beim Speichern des Cases. Siehe Konsole.");
+      alert("Error saving case. See console for details.");
     }
   }
 
   return (
     <div className="fixed-blue-frame bg-white dark:bg-blue-950/30 p-6 rounded-lg space-y-6 text-black">
-      <h2 className="text-2xl font-bold text-center">Case-Erstellung</h2>
+      <h2 className="text-2xl font-bold text-center">Create Case</h2>
 
-      {/* Schrittanzeige */}
+      {/* Step Indicator */}
       <div className="flex items-center justify-center gap-2 mb-4">
         {[1, 2, 3, 4, 5].map((num) => (
           <div
@@ -342,7 +342,7 @@ export default function CreateCasePage() {
       {step === 1 && (
         <div className="space-y-4">
           <div className="bg-blue-100 dark:bg-blue-950/30 rounded-lg shadow-sm border border-blue-200 dark:border-blue-900/40 p-6">
-            <p className="font-semibold mb-6">Schritt 1: Basis-Informationen</p>
+            <p className="font-semibold mb-6">Step 1: Basic Information</p>
             <div className="space-y-4">
               <div>
                 <label htmlFor="caseName" className="block text-sm font-medium text-gray-700 mb-1">
@@ -354,12 +354,12 @@ export default function CreateCasePage() {
                   value={caseName}
                   onChange={(e) => setCaseName(e.target.value)}
                   className="w-full p-2 rounded border border-gray-300"
-                  placeholder="Name des Cases eingeben"
+                  placeholder="Enter case name"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Case Typ
+                  Case Type
                 </label>
                 <div className="flex gap-4">
                   <label className="flex items-center gap-2">
@@ -369,7 +369,7 @@ export default function CreateCasePage() {
                       onChange={() => setCaseType("intern")}
                       className="text-blue-600"
                     />
-                    Intern
+                    Internal
                   </label>
                   <label className="flex items-center gap-2">
                     <input
@@ -378,7 +378,7 @@ export default function CreateCasePage() {
                       onChange={() => setCaseType("extern")}
                       className="text-blue-600"
                     />
-                    Extern
+                    External
                   </label>
                 </div>
               </div>
@@ -391,13 +391,13 @@ export default function CreateCasePage() {
         <div className="space-y-4">
           <div className="bg-blue-100 dark:bg-blue-950/30 rounded-lg shadow-sm border border-blue-200 dark:border-blue-900/40 p-6">
             <div className="flex justify-between items-center mb-6">
-              <p className="font-semibold">Schritt 2: Experten auswählen</p>
+              <p className="font-semibold">Step 2: Select Experts</p>
               <div className="flex items-center text-sm text-gray-600 dark:text-gray-300">
                 <span className="font-medium">
                   {Object.values(selectedUsers).filter(user => user !== null).length}
                 </span>
                 <span className="mx-1">/</span>
-                <span>30 Experten</span>
+                <span>30 Experts</span>
               </div>
             </div>
             <div className="space-y-4">
@@ -409,7 +409,7 @@ export default function CreateCasePage() {
                       value={searchValue}
                       onChange={(e) => updateUserSearch(index, e.target.value)}
                       className="w-full p-2 rounded border border-gray-300"
-                      placeholder="Experte suchen..."
+                      placeholder="Search for experts..."
                     />
                     {dropdownOpenIndex === index && searchValue && (
                       <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded shadow-lg max-h-48 overflow-y-auto">
@@ -457,7 +457,7 @@ export default function CreateCasePage() {
                     width={16}
                     height={16}
                   />
-                  <span>User hinzufügen</span>
+                  <span>Add Expert</span>
                 </button>
               )}
             </div>
@@ -469,13 +469,13 @@ export default function CreateCasePage() {
         <div className="space-y-4">
           <div className="bg-blue-100 dark:bg-blue-950/30 rounded-lg shadow-sm border border-blue-200 dark:border-blue-900/40 p-6">
             <div className="flex justify-between items-center mb-6">
-              <p className="font-semibold">Schritt 3: Kriterien</p>
+              <p className="font-semibold">Step 3: Criteria</p>
               <div className="flex items-center text-sm text-gray-600 dark:text-gray-300">
                 <span className="font-medium">
                   {criteria.filter(c => c.trim() !== "").length}
                 </span>
                 <span className="mx-1">/</span>
-                <span>30 Kriterien</span>
+                <span>30 Criteria</span>
               </div>
             </div>
             <div className="space-y-2">
@@ -483,7 +483,7 @@ export default function CreateCasePage() {
                 <div key={index} className="flex items-center gap-2">
                   <input
                     type="text"
-                    placeholder={`Kriterium #${index + 1}`}
+                    placeholder={`Criterion #${index + 1}`}
                     value={crit}
                     onChange={(e) => {
                       const updated = [...criteria];
@@ -518,7 +518,7 @@ export default function CreateCasePage() {
                     width={16}
                     height={16}
                   />
-                  <span>Kriterium hinzufügen</span>
+                  <span>Add Criterion</span>
                 </button>
               )}
             </div>
@@ -530,13 +530,13 @@ export default function CreateCasePage() {
         <div className="space-y-4">
           <div className="bg-blue-100 dark:bg-blue-950/30 rounded-lg shadow-sm border border-blue-200 dark:border-blue-900/40 p-6">
             <div className="flex justify-between items-center mb-6">
-              <p className="font-semibold">Schritt 4: Technologien</p>
+              <p className="font-semibold">Step 4: Technologies</p>
               <div className="flex items-center text-sm text-gray-600 dark:text-gray-300">
                 <span className="font-medium">
                   {technologies.filter(t => t.trim() !== "").length}
                 </span>
                 <span className="mx-1">/</span>
-                <span>30 Technologien</span>
+                <span>30 Technologies</span>
               </div>
             </div>
             <div className="space-y-2">
@@ -544,7 +544,7 @@ export default function CreateCasePage() {
                 <div key={index} className="flex items-center gap-2">
                   <input
                     type="text"
-                    placeholder={`Technologie #${index + 1}`}
+                    placeholder={`Technology #${index + 1}`}
                     value={tech}
                     onChange={(e) => {
                       const updated = [...technologies];
@@ -579,7 +579,7 @@ export default function CreateCasePage() {
                     width={16}
                     height={16}
                   />
-                  <span>Technologie hinzufügen</span>
+                  <span>Add Technology</span>
                 </button>
               )}
             </div>
@@ -590,7 +590,7 @@ export default function CreateCasePage() {
       {step === 5 && (
         <div className="space-y-4">
           <div className="bg-blue-100 dark:bg-blue-950/30 rounded-lg shadow-sm border border-blue-200 dark:border-blue-900/40 p-6">
-            <p className="font-semibold mb-6">Schritt 5: Zusammenfassung</p>
+            <p className="font-semibold mb-6">Step 5: Summary</p>
             
             <div className="grid grid-cols-2 gap-4">
               {/* Case Information Frame */}
@@ -607,7 +607,7 @@ export default function CreateCasePage() {
                     <span className="font-medium">{caseName}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-600 dark:text-gray-400">Typ:</span>
+                    <span className="text-gray-600 dark:text-gray-400">Type:</span>
                     <span className="font-medium capitalize">{caseType}</span>
                   </div>
                 </div>
@@ -616,7 +616,7 @@ export default function CreateCasePage() {
               {/* Experts Frame */}
               <div className="bg-blue-100 dark:bg-blue-950/30 rounded-lg shadow-sm border border-blue-200 dark:border-blue-900/40 p-4">
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-medium">Experten</h3>
+                  <h3 className="font-medium">Experts</h3>
                   <div className="flex items-center gap-2">
                     <span className={`text-sm ${isStepComplete(2) ? "text-green-500" : "text-gray-600 dark:text-gray-400"}`}>
                       {Object.values(selectedUsers).filter(user => user !== null).length}/30
@@ -641,7 +641,7 @@ export default function CreateCasePage() {
               {/* Technologies Frame */}
               <div className="bg-blue-100 dark:bg-blue-950/30 rounded-lg shadow-sm border border-blue-200 dark:border-blue-900/40 p-4">
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-medium">Technologien</h3>
+                  <h3 className="font-medium">Technologies</h3>
                   <div className="flex items-center gap-2">
                     <span className={`text-sm ${isStepComplete(4) ? "text-green-500" : "text-gray-600 dark:text-gray-400"}`}>
                       {technologies.filter(t => t.trim() !== "").length}/30
@@ -666,7 +666,7 @@ export default function CreateCasePage() {
               {/* Criteria Frame */}
               <div className="bg-blue-100 dark:bg-blue-950/30 rounded-lg shadow-sm border border-blue-200 dark:border-blue-900/40 p-4">
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-medium">Kriterien</h3>
+                  <h3 className="font-medium">Criteria</h3>
                   <div className="flex items-center gap-2">
                     <span className={`text-sm ${isStepComplete(3) ? "text-green-500" : "text-gray-600 dark:text-gray-400"}`}>
                       {criteria.filter(c => c.trim() !== "").length}/30
@@ -697,7 +697,7 @@ export default function CreateCasePage() {
                     onChange={(e) => setIsDataConfirmed(e.target.checked)}
                     className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                   />
-                  <span>Ich bestätige, dass alle eingegebenen Daten korrekt sind</span>
+                  <span>I confirm that all entered data is correct</span>
                 </label>
               </div>
             </div>
@@ -717,7 +717,7 @@ export default function CreateCasePage() {
           }`}
           disabled={step === 1}
         >
-          Zurück
+          Back
         </button>
         <button
           type="button"
@@ -729,7 +729,7 @@ export default function CreateCasePage() {
               : "bg-blue-500 hover:bg-blue-600 text-white"
           }`}
         >
-          {step === 5 ? "Case erstellen" : "Weiter"}
+          {step === 5 ? "Create Case" : "Next"}
         </button>
       </div>
     </div>

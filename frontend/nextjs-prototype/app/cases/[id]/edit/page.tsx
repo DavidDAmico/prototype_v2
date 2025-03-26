@@ -158,7 +158,7 @@ export default function EditCasePage({ params }: { params: Promise<{ id: string 
         setTechMatrix(techMatrix);
       } catch (error) {
         console.error('[Page] Error fetching case:', error);
-        setErrorMessage('Fehler beim Laden der Falldaten');
+        setErrorMessage('Error fetching case data');
       } finally {
         setLoading(false);
       }
@@ -205,7 +205,7 @@ export default function EditCasePage({ params }: { params: Promise<{ id: string 
       );
 
       if (!allCriteriaRated || !allTechsRated) {
-        setErrorMessage('Bitte bewerten Sie alle Kriterien und Technologien');
+        setErrorMessage('Please rate all criteria and technologies');
         return;
       }
 
@@ -216,7 +216,7 @@ export default function EditCasePage({ params }: { params: Promise<{ id: string 
       router.push(`/success?action=evaluateCase&caseId=${id}&roundId=${roundId}`);
     } catch (error) {
       console.error('[Page] Error saving case:', error);
-      setErrorMessage('Fehler beim Speichern der Bewertung');
+      setErrorMessage('Error saving evaluation');
     } finally {
       setIsSaving(false);
     }
@@ -236,7 +236,7 @@ export default function EditCasePage({ params }: { params: Promise<{ id: string 
   if (loading || authLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <div className="text-lg">Lade Case-Daten...</div>
+        <div className="text-lg">Loading case data...</div>
       </div>
     );
   }
@@ -244,7 +244,7 @@ export default function EditCasePage({ params }: { params: Promise<{ id: string 
   if (!data) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <div className="text-lg">Keine Daten gefunden</div>
+        <div className="text-lg">No data found</div>
       </div>
     );
   }
@@ -256,7 +256,7 @@ export default function EditCasePage({ params }: { params: Promise<{ id: string 
           {/* Navigation Bar */}
           <div className="w-[280px] bg-white h-full border-r border-gray-200 p-6">
             <div className="flex items-center gap-2 mb-6">
-              <h2 className="text-base font-medium">Bewertungsstatus</h2>
+              <h2 className="text-base font-medium">Evaluation Status</h2>
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-blue-600" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" />
               </svg>
@@ -266,10 +266,10 @@ export default function EditCasePage({ params }: { params: Promise<{ id: string 
               onClick={() => setStep('criteria')}
               className="mb-4 cursor-pointer hover:opacity-80 transition-opacity"
             >
-              <div className="text-sm mb-1">Kriterien</div>
+              <div className="text-sm mb-1">Criteria</div>
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                <span className="text-sm text-gray-600">{data?.criteria.filter(c => c.rating && c.rating > 0).length}/{data?.criteria.length} bewertet</span>
+                <span className="text-sm text-gray-600">{data?.criteria.filter(c => c.rating && c.rating > 0).length}/{data?.criteria.length} rated</span>
               </div>
               <div className="w-full bg-gray-100 h-1 rounded-full">
                 <div 
@@ -282,7 +282,7 @@ export default function EditCasePage({ params }: { params: Promise<{ id: string 
             </div>
 
             <div className="mb-6">
-              <div className="text-sm mb-1">Technologien</div>
+              <div className="text-sm mb-1">Technologies</div>
               <div className="flex items-center gap-2 mb-2">
                 <div className={`w-2 h-2 rounded-full ${
                   Object.values(techMatrix).reduce((sum, tech) => 
@@ -294,7 +294,7 @@ export default function EditCasePage({ params }: { params: Promise<{ id: string 
                 <span className="text-sm text-gray-600">
                   {Object.values(techMatrix).reduce((sum, tech) => 
                     sum + Object.values(tech).filter((rating): rating is number => typeof rating === 'number' && rating > 0).length, 0
-                  )}/{data ? data.technologies.length * data.criteria.length : 0} bewertet
+                  )}/{data ? data.technologies.length * data.criteria.length : 0} rated
                 </span>
               </div>
               <div className="w-full bg-gray-100 h-1 rounded-full">
@@ -334,7 +334,7 @@ export default function EditCasePage({ params }: { params: Promise<{ id: string 
                   <div className={`p-3 rounded-lg ${step === 'tech-matrix' && index === currentTechIndex ? 'bg-blue-50 border border-blue-100' : 'bg-white border border-gray-100'}`}>
                     <div className="text-sm text-gray-600">{tech.name}</div>
                     <div className="text-xs text-gray-500 mt-1">
-                      {completedRatings}/{totalPossible} Kriterien
+                      {completedRatings}/{totalPossible} Criteria
                     </div>
                     <div className="w-full bg-gray-100 h-1 rounded-full mt-2">
                       <div 
@@ -353,26 +353,26 @@ export default function EditCasePage({ params }: { params: Promise<{ id: string 
             {/* Header */}
             <div className="p-6 border-b border-gray-200">
               <div className="flex justify-between items-center mb-8">
-                <h1 className="text-2xl font-semibold">Case bearbeiten</h1>
+                <h1 className="text-2xl font-semibold">Edit Case</h1>
                 <div className="text-lg font-medium text-gray-600">
-                  Runde 1
+                  Round 1
                 </div>
               </div>
 
               {/* Basic Info */}
               <div className="mb-6">
-                <h2 className="text-lg font-medium mb-4">Basis-Informationen</h2>
+                <h2 className="text-lg font-medium mb-4">Basic Information</h2>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <span className="text-gray-600">Case ID:</span>
                     <span className="ml-2">{data.id}</span>
                   </div>
                   <div>
-                    <span className="text-gray-600">Typ:</span>
+                    <span className="text-gray-600">Type:</span>
                     <span className="ml-2">{data.case_type}</span>
                   </div>
                   <div>
-                    <span className="text-gray-600">Erstellt am:</span>
+                    <span className="text-gray-600">Created at:</span>
                     <span className="ml-2">{new Date(data.created_at).toLocaleDateString()}</span>
                   </div>
                 </div>
@@ -394,7 +394,7 @@ export default function EditCasePage({ params }: { params: Promise<{ id: string 
 
               {step === 'criteria' ? (
                 <div>
-                  <h2 className="text-lg font-medium mb-6">Kriterien Bewertung</h2>
+                  <h2 className="text-lg font-medium mb-6">Criteria Evaluation</h2>
                   {data.criteria.map((criterion) => (
                     <div key={criterion.id} className="mb-4">
                       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -411,14 +411,14 @@ export default function EditCasePage({ params }: { params: Promise<{ id: string 
                       }}
                       className="px-4 py-2 text-blue-600 hover:text-blue-700"
                     >
-                      Weiter zur Technologie-Matrix
+                      Continue to Technology Matrix
                     </button>
                   </div>
                 </div>
               ) : (
                 <div>
                   <h2 className="text-lg font-medium mb-6">
-                    {data.technologies[currentTechIndex].name} bewerten
+                    Rate {data.technologies[currentTechIndex].name}
                   </h2>
                   {data.criteria.map((criterion) => (
                     <div key={criterion.id} className="mb-4">
@@ -438,16 +438,16 @@ export default function EditCasePage({ params }: { params: Promise<{ id: string 
                       setStep('criteria');
                       setCurrentTechIndex(-1);
                     }}
-                    className="px-4 py-2 text-blue-600 hover:text-blue-700"
+                    className="px-4 py-2 text-gray-600 hover:text-gray-700"
                   >
-                    ← Zurück zu Kriterien
+                    Back to Criteria
                   </button>
                   <button
                     onClick={handleSave}
-                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
                     disabled={isSaving}
                   >
-                    {isSaving ? 'Speichere...' : 'Bewertungen speichern'}
+                    {isSaving ? "Saving..." : "Save Evaluations"}
                   </button>
                 </div>
               )}

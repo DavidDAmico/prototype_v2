@@ -10,14 +10,14 @@ interface Case {
   id: number;
   case_type: string;
   created_at: string;
-  // Weitere Felder ergänzen, falls benötigt
+  // Add more fields if needed
 }
 
 interface AuthUser {
   user_id: number;
   role: string;
   username?: string;
-  // weitere Felder
+  // more fields
 }
 
 function getCookie(name: string): string | null {
@@ -44,7 +44,7 @@ export default function DashboardPage() {
             }
           );
           if (!res.ok) {
-            throw new Error("Fehler beim Laden der zugewiesenen Cases");
+            throw new Error("Error loading assigned cases");
           }
           const data = await res.json();
           setAssignedCases(data);
@@ -62,7 +62,7 @@ export default function DashboardPage() {
             }
           );
           if (!res.ok) {
-            throw new Error("Fehler beim Laden der Case-Historie");
+            throw new Error("Error loading case history");
           }
           const data = await res.json();
           setCaseHistory(data);
@@ -79,18 +79,18 @@ export default function DashboardPage() {
   if (loading)
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <p className="text-foreground text-lg">Lädt...</p>
+        <p className="text-foreground text-lg">Loading...</p>
       </div>
     );
 
   if (!user)
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <p className="text-foreground text-lg">Kein Zugriff</p>
+        <p className="text-foreground text-lg">Access Denied</p>
       </div>
     );
 
-  // Logout-Funktion
+  // Logout function
   const handleLogout = async () => {
     try {
       const csrfToken = getCookie("csrf_access_token");
@@ -103,11 +103,11 @@ export default function DashboardPage() {
         },
       });
       if (!res.ok) {
-        throw new Error("Fehler beim Logout");
+        throw new Error("Error during logout");
       }
       router.push("/");
     } catch (error) {
-      console.error("Fehler beim Logout:", error);
+      console.error("Error during logout:", error);
     }
   };
 
@@ -133,7 +133,7 @@ export default function DashboardPage() {
               href="/admin"
               className="flex items-center gap-3 rounded-lg bg-blue-600 dark:bg-blue-500 px-6 py-2 text-white text-sm font-medium hover:bg-blue-500 dark:hover:bg-blue-400"
             >
-              <span>Admin Bereich</span>
+              <span>Admin Area</span>
             </Link>
           )}
           <button
@@ -148,11 +148,11 @@ export default function DashboardPage() {
       <div className="max-w-6xl w-full mt-8">
         {/* Assigned Cases */}
         <div className="mb-8">
-          <h2 className="text-lg font-medium mb-4">Dir zugewiesene Cases</h2>
+          <h2 className="text-lg font-medium mb-4">Cases Assigned to You</h2>
           {assignedCases.length === 0 ? (
             <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
               <p className="text-gray-500">
-                Du hast aktuell keine zugewiesenen Cases.
+                You currently have no assigned cases.
               </p>
             </div>
           ) : (
@@ -182,7 +182,7 @@ export default function DashboardPage() {
 
         {/* Case History */}
         <div>
-          <h2 className="text-lg font-medium mb-4">Case Historie</h2>
+          <h2 className="text-lg font-medium mb-4">Case History</h2>
           {caseHistory.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {caseHistory.map((case_) => (
@@ -207,7 +207,7 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100">
-              <p className="text-gray-500">Noch keine abgeschlossenen Cases.</p>
+              <p className="text-gray-500">No completed cases yet.</p>
             </div>
           )}
         </div>

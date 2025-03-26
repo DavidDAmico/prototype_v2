@@ -52,13 +52,13 @@ export default function CreateUserPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.username || !formData.password) {
-      setError("Bitte füllen Sie alle Pflichtfelder aus.");
+      setError("Please fill in all required fields.");
       return;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.username)) {
-      setError("Bitte geben Sie eine gültige E-Mail-Adresse ein.");
+      setError("Please enter a valid email address.");
       return;
     }
 
@@ -90,7 +90,7 @@ export default function CreateUserPage() {
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || "Fehler beim Anlegen des Users.");
+        throw new Error(data.error || "Error creating user.");
       }
 
       router.push("/success?action=createUser");
@@ -103,7 +103,7 @@ export default function CreateUserPage() {
     <div className="flex items-center justify-center p-4">
       <div className="bg-blue-100 dark:bg-blue-200 p-8 rounded-lg shadow-lg w-full max-w-md text-white">
         <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100 text-center">
-          Neuen Benutzer anlegen
+          Create User
         </h2>
         {error && (
           <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
@@ -114,7 +114,7 @@ export default function CreateUserPage() {
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-black">
-                E-Mail <span className="text-red-600">*</span>
+                Email <span className="text-red-600">*</span>
               </label>
               <input
                 type="email"
@@ -129,7 +129,7 @@ export default function CreateUserPage() {
 
             <div>
               <label className="block text-sm font-medium text-black">
-                Passwort <span className="text-red-600">*</span>
+                Password <span className="text-red-600">*</span>
               </label>
               <input
                 type="password"
@@ -143,7 +143,7 @@ export default function CreateUserPage() {
 
             <div>
               <label className="block text-sm font-medium text-black">
-                Rolle
+                Role
               </label>
               <select
                 name="role"
@@ -159,10 +159,10 @@ export default function CreateUserPage() {
             <div className="space-y-4">
               <div className="flex justify-between items-center">
                 <label className="block text-sm font-medium text-black">
-                  Zusätzliche Informationen
+                  Custom Fields (optional)
                 </label>
                 <span className="text-sm text-gray-500">
-                  {formData.customFields.filter(field => field.trim() !== "").length}/5 Felder
+                  {formData.customFields.filter(field => field.trim() !== "").length}/5 Fields
                 </span>
               </div>
               {formData.customFields.map((field, index) => (
@@ -172,7 +172,7 @@ export default function CreateUserPage() {
                     name={`customField${index}`}
                     value={field}
                     onChange={handleChange}
-                    placeholder={`Zusätzliche Information #${index + 1}`}
+                    placeholder={`Custom Field #${index + 1}`}
                     className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:ring-blue-500"
                   />
                   <button
@@ -202,7 +202,7 @@ export default function CreateUserPage() {
                       width={16}
                       height={16}
                     />
-                    <span className="ml-2">Feld hinzufügen</span>
+                    <span className="ml-2">Add Field</span>
                   </div>
                 </button>
               )}
@@ -213,7 +213,7 @@ export default function CreateUserPage() {
                 type="submit"
                 className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold"
               >
-                Benutzer anlegen
+                Create User
               </button>
             </div>
           </div>

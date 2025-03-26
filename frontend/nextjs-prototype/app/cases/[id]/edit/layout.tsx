@@ -26,7 +26,7 @@ export default function EditCaseLayout({
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <div className="text-lg">Laden...</div>
+        <div className="text-lg">Loading...</div>
       </div>
     );
   }
@@ -35,7 +35,7 @@ export default function EditCaseLayout({
     console.log("[Layout] Waiting for user data...");
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <div className="text-lg">Authentifizierung...</div>
+        <div className="text-lg">Authenticating...</div>
       </div>
     );
   }

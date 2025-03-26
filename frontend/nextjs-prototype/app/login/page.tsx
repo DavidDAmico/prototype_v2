@@ -17,29 +17,29 @@ export default function LoginPage() {
     const username = formData.get("username");
     const password = formData.get("password");
 
-    console.log("🔄 Login gestartet mit:", { username, password });
+    console.log("🔄 Login started with:", { username, password });
 
     try {
       const res = await fetch("http://localhost:9000/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include", // Wichtig: credentials include, damit Cookies gesetzt werden!
+        credentials: "include", // Important: include credentials so cookies can be set!
         body: JSON.stringify({ username, password }),
       });
 
-      console.log("📡 Antwort vom Backend erhalten:", res);
+      console.log("📡 Response received from backend:", res);
 
       if (!res.ok) {
         const errorData = await res.json();
-        console.error("❌ Fehler vom Backend:", errorData);
-        throw new Error(errorData.error || "Login fehlgeschlagen");
+        console.error("❌ Error from backend:", errorData);
+        throw new Error(errorData.error || "Login failed");
       }
 
-      console.log("✅ Login erfolgreich – Cookies wurden gesetzt.");
-      console.log("🔀 Weiterleitung zu /dashboard...");
+      console.log("✅ Login successful – Cookies have been set.");
+      console.log("🔀 Redirecting to /dashboard...");
       router.push("/dashboard");
     } catch (error: any) {
-      console.error("❌ Fehler beim Login:", error.message);
+      console.error("❌ Error during login:", error.message);
       setError(error.message);
     }
   }
@@ -73,7 +73,7 @@ export default function LoginPage() {
               htmlFor="password"
               className="block text-sm font-medium text-foreground"
             >
-              Passwort
+              Password
             </label>
             <input
               id="password"
@@ -92,7 +92,7 @@ export default function LoginPage() {
                 className="mr-2"
               />
               <label htmlFor="show-password" className="text-sm text-foreground">
-                Passwort anzeigen
+                Show password
               </label>
             </div>
           </div>
@@ -102,7 +102,7 @@ export default function LoginPage() {
             className="block w-full py-2 px-4 rounded-lg text-white font-medium text-sm hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             style={{ backgroundColor: "#2563eb", color: "white" }}
           >
-            Anmelden
+            Login
           </button>
         </form>
 
@@ -112,7 +112,7 @@ export default function LoginPage() {
               className="w-full py-2 px-4 rounded-lg text-white font-medium text-sm hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
               style={{ backgroundColor: "#374151", color: "white" }}
             >
-              Zurück zur Startseite
+              Back to homepage
             </button>
           </Link>
         </div>

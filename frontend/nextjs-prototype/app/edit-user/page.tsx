@@ -52,7 +52,7 @@ export default function EditUserPage() {
         const res = await fetch("http://localhost:9000/auth/users", {
           credentials: "include",
         });
-        if (!res.ok) throw new Error("Fehler beim Laden der Nutzer");
+        if (!res.ok) throw new Error("Error loading users");
         const data = await res.json();
         setUsers(data.users);
         if (data.users.length > 0) {
@@ -75,7 +75,7 @@ export default function EditUserPage() {
           { credentials: "include" }
         );
         if (!res.ok)
-          throw new Error("Fehler beim Laden der Benutzerdetails");
+          throw new Error("Error loading user details");
         const data = await res.json();
         setUserData(data.user);
         setFormData({
@@ -146,14 +146,14 @@ export default function EditUserPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.username) {
-      setError("E-Mail-Adresse ist erforderlich");
+      setError("Email address is required");
       return;
     }
 
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.username)) {
-      setError("Bitte geben Sie eine gültige E-Mail-Adresse ein.");
+      setError("Please enter a valid email address.");
       return;
     }
 
@@ -178,12 +178,12 @@ export default function EditUserPage() {
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || "Fehler beim Aktualisieren des Users");
+        throw new Error(data.error || "Error updating user");
       }
 
       const data = await res.json();
       
-      // Aktualisiere die Benutzerliste und die Anzeige
+      // Update user list and display
       const updatedUser: User = {
         id: selectedUserId,
         username: formData.username,
@@ -202,7 +202,7 @@ export default function EditUserPage() {
 
   // User löschen
   const handleDelete = async (userId: number) => {
-    if (!confirm("Möchten Sie diesen Benutzer wirklich löschen?")) return;
+    if (!confirm("Do you really want to delete this user?")) return;
     setError("");
     setSuccess("");
 
@@ -221,10 +221,10 @@ export default function EditUserPage() {
       );
       if (!res.ok) {
         const text = await res.text();
-        console.error("Fehlerhafte Antwort beim Löschen:", text);
-        throw new Error("Fehler beim Löschen des Users.");
+        console.error("Error deleting user:", text);
+        throw new Error("Error deleting user.");
       }
-      setSuccess("Benutzer erfolgreich gelöscht!");
+      setSuccess("User deleted successfully!");
       setUsers((prev) => prev.filter((u) => u.id !== userId));
       if (userId === selectedUserId) {
         setUserData(null);
@@ -241,7 +241,7 @@ export default function EditUserPage() {
     <div className="flex items-center justify-center p-4">
       <div className="bg-blue-100 dark:bg-blue-200 p-8 rounded-lg shadow-lg w-full max-w-md">
         <h2 className="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100 text-center">
-          Benutzer bearbeiten
+          Edit User
         </h2>
 
         {/* User Selection Dropdown */}
@@ -250,7 +250,7 @@ export default function EditUserPage() {
             className="p-3 border rounded-lg bg-white cursor-pointer flex justify-between items-center"
             onClick={() => setDropdownOpen(!dropdownOpen)}
           >
-            <span>{userData?.username || "Benutzer auswählen"}</span>
+            <span>{userData?.username || "Select a user"}</span>
             <svg
               className={`w-5 h-5 transform transition-transform ${dropdownOpen ? "rotate-180" : ""}`}
               fill="none"
@@ -272,7 +272,7 @@ export default function EditUserPage() {
             <div className="absolute z-10 w-full bg-white border rounded-lg mt-1 shadow-lg">
               <input
                 type="text"
-                placeholder="Suchen..."
+                placeholder="Search users..."
                 className="w-full p-2 border-b"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -310,7 +310,7 @@ export default function EditUserPage() {
               {/* Email field */}
               <div>
                 <label className="block text-sm font-medium text-black">
-                  E-Mail <span className="text-red-600">*</span>
+                  Email <span className="text-red-600">*</span>
                 </label>
                 <input
                   type="email"
@@ -325,7 +325,7 @@ export default function EditUserPage() {
               {/* Role field */}
               <div>
                 <label className="block text-sm font-medium text-black">
-                  Rolle
+                  Role
                 </label>
                 <select
                   name="role"
@@ -341,7 +341,7 @@ export default function EditUserPage() {
               {/* New Password field */}
               <div>
                 <label className="block text-sm font-medium text-black">
-                  Neues Passwort
+                  New Password (optional)
                 </label>
                 <input
                   type="password"
@@ -349,7 +349,6 @@ export default function EditUserPage() {
                   value={formData.newPassword}
                   onChange={handleChange}
                   className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:ring-blue-500"
-                  placeholder="Leer lassen für keine Änderung"
                 />
               </div>
 
@@ -357,10 +356,10 @@ export default function EditUserPage() {
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
                   <label className="block text-sm font-medium text-black">
-                    Zusätzliche Informationen
+                    Custom Fields (optional)
                   </label>
                   <span className="text-sm text-gray-500">
-                    {formData.customFields.filter(field => field.trim() !== "").length}/5 Felder
+                    {formData.customFields.filter(field => field.trim() !== "").length}/5 fields
                   </span>
                 </div>
                 {formData.customFields.map((field, index) => (
@@ -370,7 +369,7 @@ export default function EditUserPage() {
                       name={`customField${index}`}
                       value={field}
                       onChange={handleChange}
-                      placeholder={`Zusätzliche Information #${index + 1}`}
+                      placeholder={`Custom Field ${index + 1}`}
                       className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:ring-blue-500"
                     />
                     <button
@@ -400,7 +399,7 @@ export default function EditUserPage() {
                         width={16}
                         height={16}
                       />
-                      <span className="ml-2">Feld hinzufügen</span>
+                      <span className="ml-2">Add Field</span>
                     </div>
                   </button>
                 )}
@@ -408,30 +407,30 @@ export default function EditUserPage() {
             </div>
 
             <div className="flex justify-center gap-4">
-              {/* Speichern-Button */}
+              {/* Save Button */}
               <button
                 type="submit"
                 className="custom-action-button flex items-center justify-center p-2 rounded-lg bg-white hover:bg-green-600 transition text-white"
-                title="Änderungen speichern"
+                title="Save Changes"
               >
                 <Image
                   src="/icons/save.png"
-                  alt="Speichern"
+                  alt="Save"
                   width={20}
                   height={20}
                   className="icon-save"
                 />
               </button>
-              {/* Löschen-Button */}
+              {/* Delete Button */}
               <button
                 type="button"
                 onClick={() => handleDelete(selectedUserId)}
                 className="custom-action-button flex items-center justify-center p-2 rounded-lg bg-white hover:bg-red-600 transition text-white"
-                title="Benutzer löschen"
+                title="Delete User"
               >
                 <Image
                   src="/icons/delete.png"
-                  alt="Löschen"
+                  alt="Delete"
                   width={20}
                   height={20}
                   className="icon-delete"
