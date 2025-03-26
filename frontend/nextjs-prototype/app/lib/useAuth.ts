@@ -12,6 +12,9 @@ export default function useAuth() {
   const router = useRouter();
 
   useEffect(() => {
+    let isMounted = true;
+    let retryTimeout: NodeJS.Timeout;
+
     async function fetchUser() {
       try {
         const res = await fetch("http://localhost:9000/auth/protected", {
@@ -19,10 +22,10 @@ export default function useAuth() {
           headers: {
             "Content-Type": "application/json",
           },
-          // Wichtig: Cookies (inkl. JWT) werden automatisch mitgesendet
           credentials: "include",
         });
 
+        if (!isMounted) return;
         console.log("📡 Antwort von /protected:", res);
 
         if (!res.ok) {
@@ -30,17 +33,36 @@ export default function useAuth() {
         }
 
         const data = await res.json();
+        if (!isMounted) return;
+        
         console.log("✅ User-Daten erhalten:", data);
         setUser(data.user);
+        setLoading(false);
       } catch (error) {
+        if (!isMounted) return;
+        
         console.error("❌ Fehler beim Abruf der User-Daten:", error);
         setUser(null);
-        router.push("/login");
+        
+        // Only redirect to login if we're not already on the login page
+        if (!window.location.pathname.includes('/login')) {
+          router.push("/login");
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     }
+
     fetchUser();
+
+    return () => {
+      isMounted = false;
+      if (retryTimeout) {
+        clearTimeout(retryTimeout);
+      }
+    };
   }, [router]);
 
   return { user, loading, isMaster: user?.role === "master" };

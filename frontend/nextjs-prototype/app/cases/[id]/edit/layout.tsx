@@ -3,12 +3,43 @@
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowRightIcon } from "@heroicons/react/24/outline";
+import useAuth from "../../../lib/useAuth";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
 export default function EditCaseLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      console.log("[Layout] No user found, redirecting to login...");
+      router.push('/login');
+      return;
+    }
+  }, [user, loading, router]);
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-lg">Laden...</div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    console.log("[Layout] Waiting for user data...");
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-lg">Authentifizierung...</div>
+      </div>
+    );
+  }
+
   return (
     <main className="flex min-h-screen flex-col items-center p-6 bg-background text-foreground transition-none">
       {/* Header */}

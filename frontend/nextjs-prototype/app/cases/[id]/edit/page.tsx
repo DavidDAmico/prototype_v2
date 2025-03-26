@@ -1,26 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from 'next/navigation';
+import React, { useState, useEffect } from 'react';
+import { use } from 'react';
 import useAuth from "../../../lib/useAuth";
 import LikertScale from "../../../components/LikertScale";
-
-interface Case {
-  id: number;
-  project_id: number;
-  case_type: string;
-  show_results: boolean;
-  created_at: string;
-  criteria: Array<{
-    id: number;
-    name: string;
-    rating?: number;
-  }>;
-  technologies: Array<{
-    id: number;
-    name: string;
-  }>;
-}
 
 interface TechCriteriaMatrix {
   [techId: number]: {
@@ -28,278 +12,403 @@ interface TechCriteriaMatrix {
   };
 }
 
-export default function EditCasePage() {
+interface CaseRound {
+  id: number;
+  round_number: number;
+  created_at: string;
+}
+
+interface Case {
+  id: number;
+  project_id: number;
+  case_type: string;
+  show_results: boolean;
+  created_at: string;
+  name: string;
+  rounds: CaseRound[];
+  criteria: Array<{
+    id: number;
+    name: string;
+    rating?: number;
+    evaluations?: Array<{ user_id: number, technology_id: number, score: number, case_round_id: number }>;
+  }>;
+  technologies: Array<{
+    id: number;
+    name: string;
+  }>;
+}
+
+interface User {
+  user_id: number;
+  email: string;
+  name?: string;
+}
+
+export default function EditCasePage({ params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = use(params);
+  const { id } = resolvedParams;
   const router = useRouter();
-  const params = useParams();
-  const { user } = useAuth();
-  const [loading, setLoading] = useState(true);
-  const [caseData, setCaseData] = useState<Case | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
-  const [currentStep, setCurrentStep] = useState<'criteria' | 'tech-matrix'>('criteria');
+  const { user, loading: authLoading } = useAuth();
+  const [step, setStep] = useState<'criteria' | 'tech-matrix'>('criteria');
+  const [currentTechIndex, setCurrentTechIndex] = useState(0);
+  const [data, setData] = useState<Case | null>(null);
   const [techMatrix, setTechMatrix] = useState<TechCriteriaMatrix>({});
+  const [loading, setLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
+
+  const handleCriterionRating = (criterionId: number, rating: number) => {
+    if (!data) return;
+
+    setData({
+      ...data,
+      criteria: data.criteria.map(c => 
+        c.id === criterionId ? { ...c, rating } : c
+      )
+    });
+  };
+
+  const handleTechCriterionRating = (techId: number, criterionId: number, rating: number) => {
+    setTechMatrix(prev => ({
+      ...prev,
+      [techId]: {
+        ...(prev[techId] || {}),
+        [criterionId]: rating
+      }
+    }));
+  };
 
   useEffect(() => {
-    const fetchCase = async () => {
+    const fetchData = async () => {
+      if (!user) return;
+
       try {
-        const response = await fetch(`http://localhost:9000/cases/${params.id}`, {
-          credentials: 'include'
+        // Fetch case data
+        const response = await fetch(`http://localhost:9000/cases/${id}`, {
+          credentials: 'include',
+          headers: {
+            'Accept': 'application/json'
+          }
         });
-        if (!response.ok) throw new Error('Case nicht gefunden');
-        const data = await response.json();
-        setCaseData(data);
-        
-        // Initialize tech matrix
-        const matrix: TechCriteriaMatrix = {};
-        data.technologies.forEach((tech: { id: number; name: string }) => {
-          matrix[tech.id] = {};
-          data.criteria.forEach((criterion: { id: number; name: string; rating?: number }) => {
-            matrix[tech.id][criterion.id] = 0;
-          });
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch case data');
+        }
+
+        const caseData = await response.json();
+        console.log("[Page] Fetched case data:", caseData);
+
+        // Fetch evaluations for round 1
+        const evalResponse = await fetch(`http://localhost:9000/cases/${id}/evaluations/1`, {
+          credentials: 'include',
+          headers: {
+            'Accept': 'application/json'
+          }
         });
-        setTechMatrix(matrix);
+
+        let evaluations = [];
+        if (evalResponse.ok) {
+          const allEvaluations = await evalResponse.json();
+          // Filter evaluations by current user
+          evaluations = allEvaluations.filter((e: any) => e.user_id === user.user_id);
+          console.log("[Page] Fetched evaluations for user:", evaluations);
+        } else {
+          console.error("[Page] Failed to fetch evaluations:", await evalResponse.text());
+        }
+
+        // Group evaluations by type (criteria vs tech matrix)
+        const criteriaEvals = evaluations.filter((e: any) => e.technology_id === null);
+        const techMatrixEvals = evaluations.filter((e: any) => e.technology_id !== null);
+
+        console.log("[Page] Criteria evaluations:", criteriaEvals);
+        console.log("[Page] Tech matrix evaluations:", techMatrixEvals);
+
+        // Create criteria array with ratings
+        const criteria = caseData.criteria.map((c: any, index: number) => {
+          const evaluation = criteriaEvals.find((e: any) => e.criterion_id === index + 1);
+          const rating = evaluation ? Number(evaluation.score) : undefined; // Convert Decimal to Number
+          console.log(`[Page] Setting rating for criterion ${index + 1}:`, rating);
+          return {
+            ...c,
+            id: index + 1,
+            rating
+          };
+        });
+
+        // Create tech matrix from evaluations
+        const techMatrix = techMatrixEvals.reduce((acc: any, evaluation: any) => {
+          const techId = evaluation.technology_id;
+          const score = Number(evaluation.score); // Convert Decimal to Number
+          if (!acc[techId]) {
+            acc[techId] = {};
+          }
+          acc[techId][evaluation.criterion_id] = score;
+          console.log(`[Page] Setting tech matrix value for tech ${techId}, criterion ${evaluation.criterion_id}:`, score);
+          return acc;
+        }, {});
+
+        console.log("[Page] Mapped criteria:", criteria);
+        console.log("[Page] Mapped tech matrix:", techMatrix);
+
+        setData({
+          ...caseData,
+          criteria
+        });
+        setTechMatrix(techMatrix);
       } catch (error) {
-        console.error('Fehler beim Laden des Cases:', error);
-        setMessage({ type: 'error', text: 'Fehler beim Laden des Cases' });
+        console.error('[Page] Error fetching case:', error);
+        setErrorMessage('Fehler beim Laden der Falldaten');
       } finally {
         setLoading(false);
       }
     };
 
-    if (params.id) {
-      fetchCase();
-    }
-  }, [params.id]);
+    fetchData();
+  }, [id, user]);
 
-  const handleRatingChange = (criterionId: number, value: number) => {
-    if (!caseData) return;
-    setCaseData(prev => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        criteria: prev.criteria.map(criterion =>
-          criterion.id === criterionId
-            ? { ...criterion, rating: value }
-            : criterion
-        )
-      };
-    });
-  };
+  const renderLikertScale = (criterion: any) => (
+    <LikertScale
+      key={criterion.id}
+      value={criterion.rating || 0}
+      onChange={(value) => handleCriterionRating(criterion.id, value)}
+      type="importance"
+    />
+  );
 
-  const handleTechMatrixChange = (techId: number, criterionId: number, value: number) => {
-    setTechMatrix(prev => ({
-      ...prev,
-      [techId]: {
-        ...prev[techId],
-        [criterionId]: value
-      }
-    }));
-  };
-
-  const handleSubmit = async () => {
-    if (!caseData) return;
-    setIsSubmitting(true);
-    
-    try {
-      if (currentStep === 'criteria') {
-        // Save criteria ratings
-        const response = await fetch(`http://localhost:9000/cases/${params.id}/ratings`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include',
-          body: JSON.stringify({
-            ratings: caseData.criteria.reduce((acc, criterion) => ({
-              ...acc,
-              [criterion.id]: criterion.rating || 0
-            }), {})
-          }),
-        });
-
-        if (!response.ok) throw new Error('Fehler beim Speichern');
-        
-        setMessage({ type: 'success', text: 'Kriterien-Bewertungen gespeichert' });
-        setCurrentStep('tech-matrix');
-      } else {
-        // Save tech matrix
-        const response = await fetch(`http://localhost:9000/cases/${params.id}/tech-matrix`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include',
-          body: JSON.stringify({ matrix: techMatrix }),
-        });
-
-        if (!response.ok) throw new Error('Fehler beim Speichern');
-        
-        setMessage({ type: 'success', text: 'Bewertungen erfolgreich gespeichert' });
-        setTimeout(() => router.push('/dashboard'), 2000);
-      }
-    } catch (error) {
-      console.error('Fehler:', error);
-      setMessage({ type: 'error', text: 'Fehler beim Speichern der Bewertungen' });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  if (loading) {
+  const renderTechLikertScale = (techId: number, criterionId: number) => {
+    const value = techMatrix[techId]?.[criterionId] || 0;
+    console.log(`[Page] Rendering tech scale for tech ${techId}, criterion ${criterionId}, value:`, value);
     return (
-      <div className="min-h-screen bg-gray-50 p-8">
-        <div className="max-w-4xl mx-auto">
-          <div className="animate-pulse flex space-x-4">
-            <div className="flex-1 space-y-4 py-1">
-              <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-              <div className="space-y-3">
-                <div className="h-4 bg-gray-200 rounded"></div>
-                <div className="h-4 bg-gray-200 rounded w-5/6"></div>
-              </div>
-            </div>
-          </div>
-        </div>
+      <LikertScale
+        key={`${techId}-${criterionId}`}
+        value={value}
+        onChange={(value) => handleTechCriterionRating(techId, criterionId, value)}
+        type="importance"
+      />
+    );
+  };
+
+  const handleSave = async () => {
+    if (!user || !data) return;
+
+    try {
+      setIsSaving(true);
+      const roundId = 1;
+
+      // Save criteria ratings
+      const ratingsResponse = await fetch(`http://localhost:9000/cases/${id}/ratings`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          user_id: user.user_id,
+          round_id: roundId,
+          ratings: data.criteria.reduce((acc: any, criterion: any) => {
+            if (criterion.rating !== undefined) {
+              acc[criterion.id] = criterion.rating;
+            }
+            return acc;
+          }, {})
+        })
+      });
+
+      if (!ratingsResponse.ok) {
+        throw new Error('Failed to save ratings');
+      }
+
+      // Save tech matrix evaluations
+      const techResponse = await fetch(`http://localhost:9000/cases/${id}/evaluate-tech-criteria`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          user_id: user.user_id,
+          round_id: roundId,
+          tech_criteria_matrix: techMatrix
+        })
+      });
+
+      if (!techResponse.ok) {
+        throw new Error('Failed to save tech matrix');
+      }
+
+      router.push(`/success?action=evaluateCase&caseId=${id}&roundId=${roundId}`);
+    } catch (error) {
+      console.error('[Page] Error saving case:', error);
+      setErrorMessage('Fehler beim Speichern der Bewertung');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const isTechEvaluated = (techId: number) => {
+    if (!data) return false;
+    return data.criteria.every(criterion => 
+      (techMatrix[techId]?.[criterion.id] || 0) > 0
+    );
+  };
+
+  if (!user) {
+    return null; // Layout will handle the loading state
+  }
+
+  if (loading || authLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-lg">Lade Case-Daten...</div>
       </div>
     );
   }
 
-  if (!caseData) {
+  if (!data) {
     return (
-      <div className="min-h-screen bg-gray-50 p-8">
-        <div className="max-w-4xl mx-auto">
-          <div className="bg-white rounded-lg shadow p-6">
-            <h1 className="text-xl font-semibold text-red-600">Case nicht gefunden</h1>
-          </div>
-        </div>
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-lg">Keine Daten gefunden</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
-      <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="bg-white rounded-lg shadow-lg">
           {/* Header */}
           <div className="p-6 border-b border-gray-200">
             <div className="flex justify-between items-center mb-8">
               <h1 className="text-2xl font-semibold">Case bearbeiten</h1>
+              <div className="text-lg font-medium text-gray-600">
+                Runde 1
+              </div>
+            </div>
+
+            {/* Basic Info */}
+            <div className="mb-6">
+              <h2 className="text-lg font-medium mb-4">Basis-Informationen</h2>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <span className="text-gray-600">Case ID:</span>
+                  <span className="ml-2">{data.id}</span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Typ:</span>
+                  <span className="ml-2">{data.case_type}</span>
+                </div>
+                <div>
+                  <span className="text-gray-600">Erstellt am:</span>
+                  <span className="ml-2">{new Date(data.created_at).toLocaleDateString()}</span>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Basis-Informationen */}
-          <div className="p-6 border-b border-gray-200 bg-gray-50">
-            <h2 className="text-lg font-medium text-gray-900 mb-4">Basis-Informationen</h2>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <span className="text-gray-500">Case ID:</span>
-                <span className="ml-2 text-gray-900">{caseData.id}</span>
+          {/* Content */}
+          <div className="p-6">
+            {successMessage && (
+              <div className="mb-4 p-4 bg-green-100 text-green-700 rounded-lg">
+                {successMessage}
               </div>
-              <div>
-                <span className="text-gray-500">Typ:</span>
-                <span className="ml-2 text-gray-900">{caseData.case_type}</span>
+            )}
+            {errorMessage && (
+              <div className="mb-4 p-4 bg-red-100 text-red-700 rounded-lg">
+                {errorMessage}
               </div>
-              <div>
-                <span className="text-gray-500">Erstellt am:</span>
-                <span className="ml-2 text-gray-900">
-                  {new Date(caseData.created_at).toLocaleDateString('de-DE')}
-                </span>
-              </div>
-            </div>
-          </div>
+            )}
 
-          {/* Content based on current step */}
-          {currentStep === 'criteria' ? (
-            <div className="p-6">
-              <h2 className="text-lg font-medium text-gray-900 mb-6">Kriterien Bewertung</h2>
-              <div className="space-y-8">
-                {caseData.criteria.map((criterion) => (
-                  <div key={criterion.id} className="bg-gray-50 p-6 rounded-lg">
-                    <h3 className="text-md font-medium text-gray-900 mb-4">{criterion.name}</h3>
-                    <LikertScale
-                      value={criterion.rating || 0}
-                      onChange={(value) => handleRatingChange(criterion.id, value)}
-                      type="importance"
-                    />
+            {step === 'criteria' ? (
+              <div>
+                <h2 className="text-lg font-medium mb-6">Kriterien Bewertung</h2>
+                {data.criteria.map((criterion) => (
+                  <div key={criterion.id} className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {criterion.name}
+                    </label>
+                    {renderLikertScale(criterion)}
                   </div>
                 ))}
+                <div className="mt-6 flex justify-end">
+                  <button
+                    onClick={() => setStep('tech-matrix')}
+                    className="px-4 py-2 text-blue-600 hover:text-blue-700"
+                  >
+                    Weiter zur Technologie-Matrix
+                  </button>
+                </div>
               </div>
-            </div>
-          ) : (
-            <div className="p-6">
-              <h2 className="text-lg font-medium text-gray-900 mb-6">Technologie-Kriterien Matrix</h2>
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead>
-                    <tr>
-                      <th className="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"></th>
-                      {caseData.technologies.map(tech => (
-                        <th key={tech.id} className="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          {tech.name}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {caseData.criteria.map(criterion => (
-                      <tr key={criterion.id}>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {criterion.name}
-                        </td>
-                        {caseData.technologies.map(tech => (
-                          <td key={tech.id} className="px-6 py-4 whitespace-nowrap">
-                            <LikertScale
-                              value={techMatrix[tech.id]?.[criterion.id] || 0}
-                              onChange={(value) => handleTechMatrixChange(tech.id, criterion.id, value)}
-                              type="performance"
-                            />
-                          </td>
-                        ))}
-                      </tr>
+            ) : (
+              <div className="flex">
+                {/* Vertical Navigation */}
+                <div className="w-48 border-r border-gray-200 pr-4">
+                  <h3 className="text-sm font-medium text-gray-500 mb-4">Technologien</h3>
+                  <div className="space-y-2">
+                    {data.technologies.map((tech, index) => (
+                      <button
+                        key={tech.id}
+                        onClick={() => setCurrentTechIndex(index)}
+                        className={`w-full text-left px-3 py-2 rounded-lg flex items-center justify-between ${
+                          index === currentTechIndex
+                            ? 'bg-blue-50 text-blue-700'
+                            : 'hover:bg-gray-50'
+                        }`}
+                      >
+                        <span className="truncate">{tech.name}</span>
+                        <span>
+                          {isTechEvaluated(tech.id) ? (
+                            <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          ) : index === currentTechIndex ? (
+                            <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                            </svg>
+                          ) : null}
+                        </span>
+                      </button>
                     ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
+                  </div>
+                </div>
 
-          {/* Actions */}
-          <div className="p-6 bg-gray-50 border-t border-gray-200">
-            <div className="flex justify-between items-center">
-              {currentStep === 'tech-matrix' && (
+                {/* Matrix Content */}
+                <div className="flex-1 pl-6">
+                  <h2 className="text-lg font-medium mb-6">
+                    {data.technologies[currentTechIndex].name} bewerten
+                  </h2>
+                  {data.criteria.map((criterion) => (
+                    <div key={criterion.id} className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {criterion.name}
+                      </label>
+                      {renderTechLikertScale(data.technologies[currentTechIndex].id, criterion.id)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {step === 'tech-matrix' && (
+              <div className="mt-6 flex justify-between border-t border-gray-200 pt-6">
                 <button
-                  onClick={() => setCurrentStep('criteria')}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  onClick={() => setStep('criteria')}
+                  className="px-4 py-2 text-blue-600 hover:text-blue-700"
                 >
                   ← Zurück zu Kriterien
                 </button>
-              )}
-              <div className="flex space-x-4 ml-auto">
                 <button
-                  onClick={handleSubmit}
-                  disabled={isSubmitting}
-                  className={`px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
-                    isSubmitting ? 'opacity-75 cursor-not-allowed' : ''
-                  }`}
+                  onClick={handleSave}
+                  className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+                  disabled={isSaving}
                 >
-                  {isSubmitting 
-                    ? 'Wird gespeichert...' 
-                    : currentStep === 'criteria' 
-                      ? 'Weiter zur Technologie-Matrix' 
-                      : 'Bewertungen speichern'
-                  }
+                  {isSaving ? 'Speichere...' : 'Bewertungen speichern'}
                 </button>
               </div>
-            </div>
+            )}
           </div>
-
-          {/* Messages */}
-          {message && (
-            <div className={`p-4 ${
-              message.type === 'success' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'
-            }`}>
-              {message.text}
-            </div>
-          )}
         </div>
       </div>
     </div>

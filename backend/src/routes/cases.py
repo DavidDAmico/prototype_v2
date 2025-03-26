@@ -166,7 +166,9 @@ def get_case(case_id):
             "evaluations": [
                 {
                     "user_id": e.user_id,
+                    "technology_id": e.technology_id,
                     "score": float(e.score),
+                    "case_round_id": e.case_round_id,
                     "created_at": e.created_at.isoformat()
                 }
                 for e in Evaluation.query.filter_by(criterion_id=c.id).all()
@@ -277,6 +279,10 @@ def evaluate_tech_criteria(case_id):
     round_id = data.get('round_id')
     tech_criteria_matrix = data.get('tech_criteria_matrix', {})  # Format: {tech_id: {criterion_id: score}}
 
+    print(f"DEBUG: Received tech matrix evaluation for case {case_id}")
+    print(f"DEBUG: user_id={user_id}, round_id={round_id}")
+    print(f"DEBUG: tech_criteria_matrix={tech_criteria_matrix}")
+
     if not user_id or not round_id or not tech_criteria_matrix:
         return jsonify({"message": "user_id, round_id and tech_criteria_matrix are required"}), 400
 
@@ -287,9 +293,9 @@ def evaluate_tech_criteria(case_id):
     try:
         # Save each technology-criterion evaluation
         for tech_id, criteria_scores in tech_criteria_matrix.items():
-            tech_id = int(tech_id)  # Convert to integer
+            tech_id = int(tech_id)
             for criterion_id, score in criteria_scores.items():
-                criterion_id = int(criterion_id)  # Convert to integer
+                criterion_id = int(criterion_id)
                 # Check if evaluation already exists
                 existing_eval = Evaluation.query.filter_by(
                     case_round_id=round_id,
@@ -300,6 +306,7 @@ def evaluate_tech_criteria(case_id):
 
                 if existing_eval:
                     existing_eval.score = score
+                    print(f"DEBUG: Updated tech evaluation - tech:{tech_id}, criterion:{criterion_id}, score:{score}")
                 else:
                     new_eval = Evaluation(
                         case_round_id=round_id,
@@ -309,11 +316,14 @@ def evaluate_tech_criteria(case_id):
                         score=score
                     )
                     db.session.add(new_eval)
+                    print(f"DEBUG: Created tech evaluation - tech:{tech_id}, criterion:{criterion_id}, score:{score}")
 
         db.session.commit()
+        print("DEBUG: Successfully saved all tech matrix evaluations")
         return jsonify({"message": "Technology-criteria evaluations saved successfully"}), 200
 
     except Exception as e:
+        print(f"Error saving evaluations: {str(e)}")
         db.session.rollback()
         return jsonify({"message": f"Error saving evaluations: {str(e)}"}), 500
 
@@ -323,27 +333,87 @@ def save_case_ratings(case_id):
     Save ratings for a case's criteria
     """
     try:
-        case = Case.query.get(case_id)
-        if not case:
-            return jsonify({"message": "Case not found"}), 404
-
+        print(f"DEBUG: Received ratings request for case {case_id}")
         data = request.json
         ratings = data.get('ratings', {})
+        user_id = data.get('user_id')
+        round_id = data.get('round_id')
 
-        # Speichere die Bewertungen für jedes Kriterium
-        for criterion_id, rating in ratings.items():
-            criterion = Criterion.query.get(int(criterion_id))
-            if criterion:
-                criterion.rating = rating
-                print(f"DEBUG: Saving rating {rating} for criterion {criterion_id}")
+        print(f"DEBUG: Saving ratings with data: user_id={user_id}, round_id={round_id}, ratings={ratings}")
+
+        if not user_id or not round_id:
+            return jsonify({"message": "user_id and round_id are required"}), 400
+
+        # Save evaluations for each criterion
+        for criterion_id, score in ratings.items():
+            criterion_id = int(criterion_id)
+            # Check if evaluation already exists
+            existing_eval = Evaluation.query.filter_by(
+                case_round_id=round_id,
+                user_id=user_id,
+                criterion_id=criterion_id,
+                technology_id=None  # Important: criteria ratings have no technology_id
+            ).first()
+
+            if existing_eval:
+                existing_eval.score = score
+                print(f"DEBUG: Updated existing evaluation for criterion {criterion_id}: {score}")
+            else:
+                new_eval = Evaluation(
+                    case_round_id=round_id,
+                    user_id=user_id,
+                    criterion_id=criterion_id,
+                    technology_id=None,  # Important: criteria ratings have no technology_id
+                    score=score
+                )
+                db.session.add(new_eval)
+                print(f"DEBUG: Created new evaluation for criterion {criterion_id}: {score}")
 
         db.session.commit()
+        print("DEBUG: Successfully saved all ratings")
         return jsonify({"message": "Ratings saved successfully"}), 200
 
     except Exception as e:
         print(f"Error saving ratings: {str(e)}")
         db.session.rollback()
         return jsonify({"message": f"Error saving ratings: {str(e)}"}), 500
+
+@cases_bp.route('/<int:case_id>/evaluations/<int:round_id>', methods=['GET'])
+def get_round_evaluations(case_id, round_id):
+    """
+    Get all evaluations for a specific round of a case
+    """
+    try:
+        print(f"DEBUG: Fetching evaluations for case {case_id}, round {round_id}")
+        case = Case.query.get(case_id)
+        if not case:
+            return jsonify({"message": "Case not found"}), 404
+
+        # Get the case round
+        case_round = CaseRound.query.filter_by(case_id=case_id, id=round_id).first()
+        if not case_round:
+            return jsonify({"message": "Round not found"}), 404
+
+        # Get all evaluations for this round
+        evaluations = Evaluation.query.filter_by(case_round_id=round_id).all()
+        
+        # Convert evaluations to dict format
+        eval_data = [{
+            'id': e.id,
+            'case_round_id': e.case_round_id,
+            'user_id': e.user_id,
+            'criterion_id': e.criterion_id,
+            'technology_id': e.technology_id,
+            'score': e.score
+        } for e in evaluations]
+
+        print(f"DEBUG: Found {len(eval_data)} evaluations for case {case_id}, round {round_id}")
+        print(f"DEBUG: Evaluations data: {eval_data}")
+        return jsonify(eval_data), 200
+
+    except Exception as e:
+        print(f"Error fetching evaluations: {str(e)}")
+        return jsonify({"message": f"Error fetching evaluations: {str(e)}"}), 500
 
 @cases_bp.route('/assigned/<int:user_id>', methods=['GET'])
 def get_assigned_cases(user_id):

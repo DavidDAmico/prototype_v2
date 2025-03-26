@@ -9,7 +9,7 @@ interface ActionConfig {
   createNewPath: string;
 }
 
-const getActionConfig = (action: string | null): ActionConfig => {
+const getActionConfig = (action: string | null, searchParams: URLSearchParams): ActionConfig => {
   switch (action) {
     case "createUser":
       return {
@@ -41,6 +41,14 @@ const getActionConfig = (action: string | null): ActionConfig => {
         createNewText: "Einen weiteren Fall bearbeiten",
         createNewPath: "/cases"
       };
+    case "evaluateCase":
+      const caseId = searchParams.get("caseId");
+      const roundId = searchParams.get("roundId");
+      return {
+        title: "Bewertung erfolgreich gespeichert",
+        createNewText: "Bewertung nochmals einsehen",
+        createNewPath: caseId && roundId ? `/cases/${caseId}/edit?round=${roundId}` : "/cases"
+      };
     default:
       return {
         title: "Aktion erfolgreich",
@@ -53,7 +61,7 @@ const getActionConfig = (action: string | null): ActionConfig => {
 export default function SuccessPage() {
   const searchParams = useSearchParams();
   const action = searchParams.get("action");
-  const config = getActionConfig(action);
+  const config = getActionConfig(action, searchParams);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-white">
