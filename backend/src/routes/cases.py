@@ -45,10 +45,12 @@ def create_case():
     technology_names = data.get('technologies', [])  # List of technology names
     assigned_user_id = data.get('assigned_user_id')  # ID des zugewiesenen Benutzers
     selected_users = data.get('selected_users', [])  # Liste aller ausgewählten Benutzer-IDs
+    case_name = data.get('name')  # Name des Cases
 
     print(f"DEBUG: Received case creation request with data: {data}")
     print(f"DEBUG: Assigned user ID: {assigned_user_id}")
     print(f"DEBUG: Selected users: {selected_users}")
+    print(f"DEBUG: Case name: {case_name}")
 
     if not case_type:
         return jsonify({"message": "case_type is required"}), 400
@@ -59,7 +61,8 @@ def create_case():
             project_id=project_id,  # Für Abwärtskompatibilität beibehalten
             case_type=case_type,
             show_results=show_results,
-            assigned_user_id=assigned_user_id  # Hauptverantwortlicher Benutzer
+            assigned_user_id=assigned_user_id,  # Hauptverantwortlicher Benutzer
+            name=case_name  # Name des Cases
         )
         db.session.add(new_case)
         db.session.flush()  # Get the case ID before committing
@@ -120,42 +123,69 @@ def get_case(case_id):
         if not case:
             return jsonify({"message": "Case not found"}), 404
 
-        # Get case-specific criteria and technologies
-        criteria = [
-            {
-                "id": c.id,
-                "name": c.name
-            }
-            for c in case.criteria
-        ]
+        # Hole alle Kriterien für diesen Case
+        criteria = []
+        for criterion in case.criteria:
+            criteria.append({
+                "id": criterion.id,
+                "name": criterion.name,
+                "rating": criterion.rating
+            })
 
-        technologies = [
-            {
-                "id": t.id,
-                "name": t.name
-            }
-            for t in case.technologies
-        ]
+        # Hole alle Technologien für diesen Case
+        technologies = []
+        for technology in case.technologies:
+            technologies.append({
+                "id": technology.id,
+                "name": technology.name
+            })
 
-        rounds = [
-            {
-                "id": r.id,
-                "round_number": r.round_number,
-                "is_completed": r.is_completed
-            }
-            for r in case.rounds
-        ]
+        # Hole alle Runden für diesen Case
+        rounds = []
+        for round_obj in case.rounds:
+            rounds.append({
+                "id": round_obj.id,
+                "round_number": round_obj.round_number,
+                "created_at": round_obj.created_at.isoformat() if round_obj.created_at else None
+            })
 
-        # Add CORS headers
+        # Hole alle zugewiesenen Benutzer und deren Bewertungsstatus
+        users = []
+        for user in case.users:
+            # Prüfe, ob der Benutzer Bewertungen für diesen Case abgegeben hat
+            evaluations = Evaluation.query.filter_by(case_id=case_id, user_id=user.id).all()
+            has_evaluated = len(evaluations) > 0
+            
+            users.append({
+                "user_id": user.id,
+                "username": user.username,
+                "has_evaluated": has_evaluated
+            })
+
+        # Füge auch den assigned_user hinzu, falls er nicht bereits in der Liste ist
+        if case.assigned_user_id and case.assigned_user_id not in [u["user_id"] for u in users]:
+            assigned_user = User.query.get(case.assigned_user_id)
+            if assigned_user:
+                evaluations = Evaluation.query.filter_by(case_id=case_id, user_id=assigned_user.id).all()
+                has_evaluated = len(evaluations) > 0
+                
+                users.append({
+                    "user_id": assigned_user.id,
+                    "username": assigned_user.username,
+                    "has_evaluated": has_evaluated
+                })
+
         response = jsonify({
             "id": case.id,
             "project_id": case.project_id,
             "case_type": case.case_type,
             "show_results": case.show_results,
             "created_at": case.created_at.isoformat() if case.created_at else None,
+            "name": case.name if case.name else f"Case {case.id}",  # Fallback, falls kein Name gesetzt ist
             "criteria": criteria,
             "technologies": technologies,
-            "rounds": rounds
+            "rounds": rounds,
+            "users": users
         })
         
         response.headers.add('Access-Control-Allow-Origin', 'http://localhost:3000')
@@ -543,7 +573,8 @@ def get_assigned_cases(user_id):
             "show_results": c.show_results,
             "created_at": c.created_at.isoformat() if c.created_at else None,
             "assigned_user_id": c.assigned_user_id,
-            "is_directly_assigned": user_id in [u.id for u in c.users]
+            "is_directly_assigned": user_id in [u.id for u in c.users],
+            "name": c.name if c.name else f"Case {c.id}"  # Name des Cases hinzufügen
         } for c in cases
     ]), 200
 
@@ -587,6 +618,7 @@ def get_case_history(user_id):
             "show_results": c.show_results,
             "created_at": c.created_at.isoformat() if c.created_at else None,
             "assigned_user_id": c.assigned_user_id,
-            "is_directly_assigned": user_id in [u.id for u in c.users]
+            "is_directly_assigned": user_id in [u.id for u in c.users],
+            "name": c.name if c.name else f"Case {c.id}"  # Name des Cases hinzufügen
         } for c in completed_cases
     ]), 200

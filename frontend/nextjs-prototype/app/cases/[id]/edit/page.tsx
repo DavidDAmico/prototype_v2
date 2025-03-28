@@ -35,6 +35,10 @@ interface Case {
     id: number;
     name: string;
   }>;
+  users?: Array<{
+    user_id: number;
+    has_evaluated: boolean;
+  }>;
 }
 
 interface User {
@@ -471,8 +475,8 @@ export default function EditCasePage({
                 <h2 className="text-lg font-medium mb-4">Basic Information</h2>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <span className="text-gray-600">Case ID:</span>
-                    <span className="ml-2">{data.id}</span>
+                    <span className="text-gray-600">Case Name:</span>
+                    <span className="ml-2">{data.name || `Case ${data.id}`}</span>
                   </div>
                   <div>
                     <span className="text-gray-600">Type:</span>
@@ -481,6 +485,12 @@ export default function EditCasePage({
                   <div>
                     <span className="text-gray-600">Created at:</span>
                     <span className="ml-2">{new Date(data.created_at).toLocaleDateString()}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Evaluation Status:</span>
+                    <span className="ml-2">
+                      Case evaluation finished by {data.users?.filter(u => u.has_evaluated).length || 0}/{data.users?.length || 0} users
+                    </span>
                   </div>
                 </div>
               </div>

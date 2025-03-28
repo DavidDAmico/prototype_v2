@@ -75,6 +75,7 @@ class Case(db.Model):
     show_results = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, server_default=db.func.now())
     assigned_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    name = db.Column(db.String(100), nullable=True)  # Name des Cases
 
     # Beziehung zu CaseRounds
     rounds = db.relationship("CaseRound", back_populates="case")

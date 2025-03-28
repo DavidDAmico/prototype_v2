@@ -10,6 +10,7 @@ interface Case {
   id: number;
   case_type: string;
   created_at: string;
+  name?: string;
   // Add more fields if needed
 }
 
@@ -169,7 +170,7 @@ export default function DashboardPage() {
                 >
                   <div className="bg-white p-4 rounded-lg shadow-sm hover:shadow-md transition-shadow border border-gray-100">
                     <div className="flex justify-between items-center mb-2">
-                      <span className="font-medium">Case {case_.id}</span>
+                      <span className="font-medium">{case_.name || `Case ${case_.id}`}</span>
                       <span className="text-sm text-blue-600 px-2 py-1 bg-blue-50 rounded">
                         {case_.case_type}
                       </span>
@@ -197,7 +198,7 @@ export default function DashboardPage() {
                 >
                   <div className="bg-white p-4 rounded-lg shadow-sm hover:shadow-md transition-shadow border border-gray-100">
                     <div className="flex justify-between items-center mb-2">
-                      <span className="font-medium">Case {case_.id}</span>
+                      <span className="font-medium">{case_.name || `Case ${case_.id}`}</span>
                       <span className="text-sm text-blue-600 px-2 py-1 bg-blue-50 rounded">
                         {case_.case_type}
                       </span>
