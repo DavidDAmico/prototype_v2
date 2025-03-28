@@ -107,7 +107,8 @@ class CaseRound(db.Model):
 class Evaluation(db.Model):
     __tablename__ = 'evaluations'
     id = db.Column(db.Integer, primary_key=True)
-    case_round_id = db.Column(db.Integer, db.ForeignKey('case_rounds.id'), nullable=False)
+    case_id = db.Column(db.Integer, db.ForeignKey('cases.id'), nullable=False)
+    round = db.Column(db.Integer, nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     criterion_id = db.Column(db.Integer, db.ForeignKey('criteria.id'), nullable=False)
     technology_id = db.Column(db.Integer, db.ForeignKey('technologies.id'), nullable=True)  # Nullable for regular criterion evaluations

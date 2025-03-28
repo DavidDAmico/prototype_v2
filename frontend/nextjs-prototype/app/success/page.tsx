@@ -13,46 +13,46 @@ const getActionConfig = (action: string | null, searchParams: URLSearchParams): 
   switch (action) {
     case "createUser":
       return {
-        title: "Benutzer erfolgreich erstellt",
-        createNewText: "Einen weiteren User erstellen",
+        title: "User created successfully",
+        createNewText: "Create another user",
         createNewPath: "/create-user"
       };
     case "editUser":
       return {
-        title: "Benutzer erfolgreich bearbeitet",
-        createNewText: "Einen weiteren User bearbeiten",
+        title: "User edited successfully",
+        createNewText: "Edit another user",
         createNewPath: "/edit-user"
       };
     case "deleteUser":
       return {
-        title: "Benutzer erfolgreich gelöscht",
-        createNewText: "Einen weiteren User bearbeiten",
+        title: "User deleted successfully",
+        createNewText: "Edit another user",
         createNewPath: "/edit-user"
       };
     case "createCase":
       return {
-        title: "Fall erfolgreich erstellt",
-        createNewText: "Einen weiteren Fall erstellen",
+        title: "Case created successfully",
+        createNewText: "Create another case",
         createNewPath: "/create-case"
       };
     case "editCase":
       return {
-        title: "Fall erfolgreich bearbeitet",
-        createNewText: "Einen weiteren Fall bearbeiten",
+        title: "Case edited successfully",
+        createNewText: "Edit another case",
         createNewPath: "/cases"
       };
     case "evaluateCase":
       const caseId = searchParams.get("caseId");
       const roundId = searchParams.get("roundId");
       return {
-        title: "Bewertung erfolgreich gespeichert",
-        createNewText: "Bewertung nochmals einsehen",
-        createNewPath: caseId && roundId ? `/cases/${caseId}/edit?round=${roundId}` : "/cases"
+        title: "Evaluation saved successfully",
+        createNewText: "Review evaluation again",
+        createNewPath: caseId ? `/cases/${caseId}/edit` : "/cases"
       };
     default:
       return {
-        title: "Aktion erfolgreich",
-        createNewText: "Zurück",
+        title: "Action completed successfully",
+        createNewText: "Back",
         createNewPath: "/dashboard"
       };
   }
@@ -88,7 +88,7 @@ export default function SuccessPage() {
             {config.title}
           </h2>
           <p className="mt-2 text-gray-600">
-            Die Aktion wurde erfolgreich ausgeführt.
+            The action was completed successfully.
           </p>
 
           <div className="mt-8 space-y-4">
@@ -100,9 +100,9 @@ export default function SuccessPage() {
             </Link>
             <Link
               href="/dashboard"
-              className="block w-full px-4 py-2 bg-white text-gray-700 rounded-lg hover:bg-gray-50 transition font-semibold border border-gray-300"
+              className="block w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition font-semibold"
             >
-              Zurück zum Dashboard
+              Back to Dashboard
             </Link>
           </div>
         </div>

@@ -1,8 +1,7 @@
 "use client";
 
 import { useRouter } from 'next/navigation';
-import React, { useState, useEffect } from 'react';
-import { use } from 'react';
+import React, { useState, useEffect, use } from 'react';
 import useAuth from "../../../lib/useAuth";
 import LikertScale from "../../../components/LikertScale";
 
@@ -44,9 +43,12 @@ interface User {
   name?: string;
 }
 
-export default function EditCasePage({ params }: { params: Promise<{ id: string }> }) {
-  const resolvedParams = use(params);
-  const { id } = resolvedParams;
+export default function EditCasePage({ 
+  params 
+}: { 
+  params: Promise<{ id: string }> 
+}) {
+  const { id } = use(params);
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const [step, setStep] = useState<'criteria' | 'tech-matrix'>('criteria');
@@ -55,8 +57,13 @@ export default function EditCasePage({ params }: { params: Promise<{ id: string 
   const [techMatrix, setTechMatrix] = useState<TechCriteriaMatrix>({});
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+  const [currentRound, setCurrentRound] = useState(1);
+  const [evaluations, setEvaluations] = useState<{
+    criteriaEvaluations: any[];
+    techMatrixEvaluations: any[];
+  }>({ criteriaEvaluations: [], techMatrixEvaluations: [] });
 
   const handleCriterionRating = (criterionId: number, rating: number) => {
     if (!data) return;
@@ -84,7 +91,10 @@ export default function EditCasePage({ params }: { params: Promise<{ id: string 
       if (!user) return;
 
       try {
-        // Fetch case data
+        setLoading(true);
+        setErrorMessage('');
+
+        // 1. Hole Case-Daten
         const response = await fetch(`http://localhost:9000/cases/${id}`, {
           credentials: 'include',
           headers: {
@@ -99,52 +109,91 @@ export default function EditCasePage({ params }: { params: Promise<{ id: string 
         const caseData = await response.json();
         console.log("[Page] Fetched case data:", caseData);
 
-        // Fetch evaluations for round 1
-        const evalResponse = await fetch(`http://localhost:9000/cases/${id}/evaluations/1`, {
+        // 2. Hole existierende Bewertungen
+        const evaluationsResponse = await fetch(`http://localhost:9000/cases/${id}/evaluations`, {
           credentials: 'include',
           headers: {
             'Accept': 'application/json'
           }
         });
 
-        let evaluations = [];
-        if (evalResponse.ok) {
-          const allEvaluations = await evalResponse.json();
-          // Filter evaluations by current user
-          evaluations = allEvaluations.filter((e: any) => e.user_id === user.user_id);
-          console.log("[Page] Fetched evaluations for user:", evaluations);
-        } else {
-          console.error("[Page] Failed to fetch evaluations:", await evalResponse.text());
+        if (!evaluationsResponse.ok) {
+          if (evaluationsResponse.status === 404) {
+            console.log('[Page] No evaluations found for case ID:', id);
+            setEvaluations({ criteriaEvaluations: [], techMatrixEvaluations: [] });
+            
+            // Initialize case data with empty ratings
+            const criteria = caseData.criteria.map((c: any) => ({
+              ...c,
+              rating: 0
+            }));
+
+            // Initialize empty tech matrix
+            const techMatrix = caseData.technologies.reduce((acc: any, tech: any) => {
+              acc[tech.id] = caseData.criteria.reduce((criteriaAcc: any, criterion: any) => {
+                criteriaAcc[criterion.id] = 0;
+                return criteriaAcc;
+              }, {});
+              return acc;
+            }, {});
+
+            setData({
+              ...caseData,
+              criteria
+            });
+            setTechMatrix(techMatrix);
+            
+            return;
+          }
+          throw new Error(`Failed to fetch evaluations: ${evaluationsResponse.status} ${evaluationsResponse.statusText}`);
         }
 
-        // Group evaluations by type (criteria vs tech matrix)
-        const criteriaEvals = evaluations.filter((e: any) => e.technology_id === null);
-        const techMatrixEvals = evaluations.filter((e: any) => e.technology_id !== null);
+        const allEvaluations = await evaluationsResponse.json();
+        console.log("[Page] Fetched all evaluations:", allEvaluations);
+        
+        // Extrahiere die Arrays aus dem Objekt
+        const criteriaEvals = allEvaluations.criteriaEvaluations || [];
+        const techMatrixEvals = allEvaluations.techMatrixEvaluations || [];
+        
+        // Filtere Evaluationen nach aktuellem Benutzer und Runde
+        const filteredCriteriaEvals = criteriaEvals.filter((e: any) => 
+          e.user_id === user.user_id && 
+          String(e.round) === String(currentRound)
+        );
+        
+        const filteredTechMatrixEvals = techMatrixEvals.filter((e: any) => 
+          e.user_id === user.user_id && 
+          String(e.round) === String(currentRound)
+        );
 
-        console.log("[Page] Criteria evaluations:", criteriaEvals);
-        console.log("[Page] Tech matrix evaluations:", techMatrixEvals);
+        console.log("[Page] Criteria evaluations:", filteredCriteriaEvals);
+        console.log("[Page] Tech matrix evaluations:", filteredTechMatrixEvals);
+
+        setEvaluations({
+          criteriaEvaluations: filteredCriteriaEvals,
+          techMatrixEvaluations: filteredTechMatrixEvals
+        });
 
         // Create criteria array with ratings
-        const criteria = caseData.criteria.map((c: any, index: number) => {
-          const evaluation = criteriaEvals.find((e: any) => e.criterion_id === index + 1);
-          const rating = evaluation ? Number(evaluation.score) : undefined; // Convert Decimal to Number
-          console.log(`[Page] Setting rating for criterion ${index + 1}:`, rating);
+        const criteria = caseData.criteria.map((c: any) => {
+          const evaluation = filteredCriteriaEvals.find((e: any) => e.criterion_id === c.id);
+          const rating = evaluation ? Number(evaluation.score) : 0;  
+          console.log(`[Page] Setting rating for criterion ${c.id}:`, rating);
           return {
             ...c,
-            id: index + 1,
             rating
           };
         });
 
         // Create tech matrix from evaluations
-        const techMatrix = techMatrixEvals.reduce((acc: any, evaluation: any) => {
-          const techId = evaluation.technology_id;
-          const score = Number(evaluation.score); // Convert Decimal to Number
-          if (!acc[techId]) {
-            acc[techId] = {};
-          }
-          acc[techId][evaluation.criterion_id] = score;
-          console.log(`[Page] Setting tech matrix value for tech ${techId}, criterion ${evaluation.criterion_id}:`, score);
+        const techMatrix = caseData.technologies.reduce((acc: any, tech: any) => {
+          acc[tech.id] = caseData.criteria.reduce((criteriaAcc: any, criterion: any) => {
+            const evaluation = filteredTechMatrixEvals.find(
+              (e: any) => e.technology_id === tech.id && e.criterion_id === criterion.id
+            );
+            criteriaAcc[criterion.id] = evaluation ? Number(evaluation.score) : 0;  
+            return criteriaAcc;
+          }, {});
           return acc;
         }, {});
 
@@ -155,6 +204,7 @@ export default function EditCasePage({ params }: { params: Promise<{ id: string 
           ...caseData,
           criteria
         });
+        
         setTechMatrix(techMatrix);
       } catch (error) {
         console.error('[Page] Error fetching case:', error);
@@ -165,7 +215,7 @@ export default function EditCasePage({ params }: { params: Promise<{ id: string 
     };
 
     fetchData();
-  }, [id, user]);
+  }, [id, user, currentRound]);
 
   const renderLikertScale = (criterion: any) => (
     <LikertScale
@@ -193,32 +243,45 @@ export default function EditCasePage({ params }: { params: Promise<{ id: string 
     if (!user || !data) return;
 
     try {
-      setIsSaving(true);
-      const roundId = 1;
+      console.log('[Page] Saving evaluations:', evaluations);
+      
+      const response = await fetch(`http://localhost:9000/cases/${id}/evaluations`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        mode: 'cors',
+        credentials: 'include',
+        body: JSON.stringify({ 
+          evaluations: [
+            ...evaluations.criteriaEvaluations,
+            ...evaluations.techMatrixEvaluations
+          ] 
+        })
+      });
 
-      // Mock: Überprüfe, ob alle Bewertungen vorhanden sind
-      const allCriteriaRated = data.criteria.every(c => c.rating && c.rating > 0);
-      const allTechsRated = data.technologies.every(tech => 
-        data.criteria.every(criterion => 
-          (techMatrix[tech.id]?.[criterion.id] || 0) > 0
-        )
-      );
-
-      if (!allCriteriaRated || !allTechsRated) {
-        setErrorMessage('Please rate all criteria and technologies');
-        return;
+      if (!response.ok) {
+        throw new Error(`Failed to save evaluations: ${response.status}`);
       }
-
-      // Mock: Simuliere erfolgreichen API-Call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // Direkt zur Success-Page weiterleiten
-      router.push(`/success?action=evaluateCase&caseId=${id}&roundId=${roundId}`);
-    } catch (error) {
-      console.error('[Page] Error saving case:', error);
-      setErrorMessage('Error saving evaluation');
-    } finally {
-      setIsSaving(false);
+      
+      setSuccessMessage('Evaluations saved successfully');
+      
+      // Bei Erfolg zur Success-Page weiterleiten
+      router.push(`/success?action=evaluateCase&caseId=${id}&roundId=${currentRound}`);
+    } catch (apiError) {
+      console.error('[Page] API Error:', apiError);
+      
+      // WORKAROUND: Speichere die Bewertungen im localStorage
+      try {
+        const storageKey = `case_${id}_evaluations_user_${user.user_id}_round_${currentRound}`;
+        localStorage.setItem(storageKey, JSON.stringify(evaluations));
+        console.log('[Page] Evaluations saved to localStorage as fallback');
+        setSuccessMessage('Evaluations saved locally (Backend not available)');
+      } catch (storageError) {
+        console.error('[Page] Storage Error:', storageError);
+        throw apiError; // Wirf den ursprünglichen Fehler
+      }
     }
   };
 
@@ -355,7 +418,7 @@ export default function EditCasePage({ params }: { params: Promise<{ id: string 
               <div className="flex justify-between items-center mb-8">
                 <h1 className="text-2xl font-semibold">Edit Case</h1>
                 <div className="text-lg font-medium text-gray-600">
-                  Round 1
+                  Round {currentRound}
                 </div>
               </div>
 

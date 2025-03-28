@@ -154,56 +154,185 @@ def create_case():
 @cases_bp.route('/<int:case_id>', methods=['GET'])
 def get_case(case_id):
     """Get a specific case with its criteria, technologies, and rounds."""
-    case = Case.query.get(case_id)
-    if not case:
-        return jsonify({"message": "Case not found"}), 404
+    try:
+        case = Case.query.get(case_id)
+        if not case:
+            return jsonify({"message": "Case not found"}), 404
 
-    # Get case-specific criteria and technologies
-    criteria = [
-        {
-            "id": c.id,
-            "name": c.name,
-            "evaluations": [
-                {
-                    "user_id": e.user_id,
-                    "technology_id": e.technology_id,
-                    "score": float(e.score),
-                    "case_round_id": e.case_round_id,
-                    "created_at": e.created_at.isoformat()
-                }
-                for e in Evaluation.query.filter_by(criterion_id=c.id).all()
-            ]
-        }
-        for c in case.criteria
-    ]
+        # Get case-specific criteria and technologies
+        criteria = [
+            {
+                "id": c.id,
+                "name": c.name
+            }
+            for c in case.criteria
+        ]
 
-    technologies = [
-        {
-            "id": t.id,
-            "name": t.name
-        }
-        for t in case.technologies
-    ]
+        technologies = [
+            {
+                "id": t.id,
+                "name": t.name
+            }
+            for t in case.technologies
+        ]
 
-    rounds = [
-        {
-            "id": r.id,
-            "round_number": r.round_number,
-            "is_completed": r.is_completed
-        }
-        for r in case.rounds
-    ]
+        rounds = [
+            {
+                "id": r.id,
+                "round_number": r.round_number,
+                "is_completed": r.is_completed
+            }
+            for r in case.rounds
+        ]
 
-    return jsonify({
-        "id": case.id,
-        "project_id": case.project_id,
-        "case_type": case.case_type,
-        "show_results": case.show_results,
-        "created_at": case.created_at.isoformat(),
-        "criteria": criteria,
-        "technologies": technologies,
-        "rounds": rounds
-    }), 200
+        # Add CORS headers
+        response = jsonify({
+            "id": case.id,
+            "project_id": case.project_id,
+            "case_type": case.case_type,
+            "show_results": case.show_results,
+            "created_at": case.created_at.isoformat() if case.created_at else None,
+            "criteria": criteria,
+            "technologies": technologies,
+            "rounds": rounds
+        })
+        
+        response.headers.add('Access-Control-Allow-Origin', 'http://localhost:3000')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Accept')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        
+        return response, 200
+    except Exception as e:
+        print(f"Error getting case: {str(e)}")
+        return jsonify({"message": f"Error getting case: {str(e)}"}), 500
+
+@cases_bp.route('/<int:case_id>', methods=['OPTIONS'])
+def handle_options_case(case_id):
+    response = jsonify({})
+    response.headers.add('Access-Control-Allow-Origin', 'http://localhost:3000')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Accept')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+    response.headers.add('Access-Control-Allow-Credentials', 'true')
+    return response, 200
+
+@cases_bp.route('/<int:case_id>/evaluations', methods=['GET'])
+def get_case_evaluations(case_id):
+    """Get all evaluations for a specific case."""
+    try:
+        case = Case.query.get(case_id)
+        if not case:
+            return jsonify({"message": "Case not found"}), 404
+
+        # Hole alle Evaluationen für diesen Case
+        evaluations = Evaluation.query.filter_by(case_id=case_id).all()
+        
+        if not evaluations:
+            # Wenn keine Evaluationen gefunden wurden, geben wir leere Arrays zurück (kein 404)
+            return jsonify({
+                "criteriaEvaluations": [],
+                "techMatrixEvaluations": []
+            }), 200
+
+        # Teile die Evaluationen in Kriterien und Tech-Matrix auf
+        criteria_evaluations = []
+        tech_matrix_evaluations = []
+
+        for eval in evaluations:
+            if eval.technology_id is None:
+                # Kriterien-Evaluation
+                criteria_evaluations.append({
+                    "id": eval.id,
+                    "user_id": eval.user_id,
+                    "criterion_id": eval.criterion_id,
+                    "score": float(eval.score),
+                    "case_id": eval.case_id,
+                    "round": eval.round,
+                    "created_at": eval.created_at.isoformat() if eval.created_at else None
+                })
+            else:
+                # Tech-Matrix-Evaluation
+                tech_matrix_evaluations.append({
+                    "id": eval.id,
+                    "user_id": eval.user_id,
+                    "criterion_id": eval.criterion_id,
+                    "technology_id": eval.technology_id,
+                    "score": float(eval.score),
+                    "case_id": eval.case_id,
+                    "round": eval.round,
+                    "created_at": eval.created_at.isoformat() if eval.created_at else None
+                })
+
+        return jsonify({
+            "criteriaEvaluations": criteria_evaluations,
+            "techMatrixEvaluations": tech_matrix_evaluations
+        }), 200
+    except Exception as e:
+        print(f"Error getting evaluations: {str(e)}")
+        return jsonify({"message": f"Error getting evaluations: {str(e)}"}), 500
+
+@cases_bp.route('/<int:case_id>/evaluations', methods=['POST'])
+def save_case_evaluations(case_id):
+    """Save evaluations for a case."""
+    try:
+        case = Case.query.get(case_id)
+        if not case:
+            return jsonify({"message": "Case not found"}), 404
+
+        data = request.get_json()
+        
+        if not data or 'evaluations' not in data:
+            return jsonify({"message": "No evaluations provided"}), 400
+
+        evaluations = data['evaluations']
+        
+        # Lösche bestehende Evaluationen für diesen Benutzer und diese Runde
+        if evaluations and len(evaluations) > 0:
+            user_id = evaluations[0].get('user_id')
+            round_num = evaluations[0].get('round')
+            
+            if user_id and round_num:
+                Evaluation.query.filter_by(
+                    case_id=case_id,
+                    user_id=user_id,
+                    round=round_num
+                ).delete()
+                db.session.commit()
+        
+        # Speichere neue Evaluationen
+        for eval_data in evaluations:
+            new_eval = Evaluation(
+                user_id=eval_data.get('user_id'),
+                criterion_id=eval_data.get('criterion_id'),
+                technology_id=eval_data.get('technology_id'),
+                score=eval_data.get('score'),
+                case_id=case_id,
+                round=eval_data.get('round')
+            )
+            db.session.add(new_eval)
+        
+        db.session.commit()
+        response = jsonify({"message": "Evaluations saved successfully"})
+        # CORS-Header hinzufügen
+        response.headers.add('Access-Control-Allow-Origin', 'http://localhost:3000')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Accept')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response, 201
+    
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error saving evaluations: {str(e)}")
+        return jsonify({"message": f"Error saving evaluations: {str(e)}"}), 500
+
+@cases_bp.route('/<int:case_id>/evaluations', methods=['OPTIONS'])
+def handle_options_evaluations(case_id):
+    response = jsonify({})
+    response.headers.add('Access-Control-Allow-Origin', 'http://localhost:3000')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Accept')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+    response.headers.add('Access-Control-Allow-Credentials', 'true')
+    return response, 200
 
 @cases_bp.route('/<int:case_id>', methods=['PUT'])
 def update_case(case_id):
