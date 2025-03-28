@@ -217,6 +217,50 @@ export default function EditCasePage({
     fetchData();
   }, [id, user, currentRound]);
 
+  useEffect(() => {
+    if (!user || !data) return;
+
+    // Sammle alle Bewertungen
+    const criteriaEvals = [];
+    const techMatrixEvals = [];
+
+    // Kriterien-Bewertungen
+    for (const criterion of data.criteria) {
+      if (criterion.rating && criterion.rating > 0) {
+        criteriaEvals.push({
+          user_id: user.user_id,
+          criterion_id: criterion.id,
+          technology_id: null,
+          score: criterion.rating,
+          case_id: parseInt(id),
+          round: currentRound
+        });
+      }
+    }
+
+    // Technologie-Matrix-Bewertungen
+    for (const techId in techMatrix) {
+      for (const criterionId in techMatrix[techId]) {
+        const rating = techMatrix[techId][criterionId];
+        if (rating && rating > 0) {
+          techMatrixEvals.push({
+            user_id: user.user_id,
+            criterion_id: parseInt(criterionId),
+            technology_id: parseInt(techId),
+            score: rating,
+            case_id: parseInt(id),
+            round: currentRound
+          });
+        }
+      }
+    }
+
+    setEvaluations({
+      criteriaEvaluations: criteriaEvals,
+      techMatrixEvaluations: techMatrixEvals
+    });
+  }, [user, data, techMatrix, id, currentRound]);
+
   const renderLikertScale = (criterion: any) => (
     <LikertScale
       key={criterion.id}
