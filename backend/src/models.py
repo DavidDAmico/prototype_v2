@@ -15,6 +15,9 @@ class User(db.Model):
 
     # Beziehung zu Projekten
     projects = db.relationship("Project", back_populates="master")
+    
+    # Beziehungen zu Cases (über case_users)
+    cases = db.relationship('Case', secondary='case_users', back_populates='users')
 
     def __repr__(self):
         return f"<User {self.username}>"
@@ -38,7 +41,7 @@ class ProjectUser(db.Model):
 class Criterion(db.Model):
     __tablename__ = 'criteria'
     id = db.Column(db.Integer, primary_key=True)
-    project_id = db.Column(db.Integer, db.ForeignKey('projects.id'))
+    project_id = db.Column(db.Integer, nullable=True)  # Behalten für Abwärtskompatibilität, aber nicht mehr als ForeignKey
     name = db.Column(db.String(255))
     rating = db.Column(db.Integer)  # Likert-Skala 1-5
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -61,13 +64,13 @@ class Criterion(db.Model):
 class Technology(db.Model):
     __tablename__ = 'technologies'
     id = db.Column(db.Integer, primary_key=True)
-    project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
+    project_id = db.Column(db.Integer, nullable=True)  # Behalten für Abwärtskompatibilität, aber nicht mehr als ForeignKey
     name = db.Column(db.String(100), nullable=False)
 
 class Case(db.Model):
     __tablename__ = 'cases'
     id = db.Column(db.Integer, primary_key=True)
-    project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
+    project_id = db.Column(db.Integer, nullable=True)  # Behalten für Abwärtskompatibilität, aber nicht mehr als ForeignKey
     case_type = db.Column(db.String(10), nullable=False)  # 'internal' oder 'external'
     show_results = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, server_default=db.func.now())
@@ -79,6 +82,7 @@ class Case(db.Model):
     # Beziehungen zu Kriterien und Technologien
     criteria = db.relationship('Criterion', secondary='case_criteria', back_populates='cases')
     technologies = db.relationship('Technology', secondary='case_technologies')
+    users = db.relationship('User', secondary='case_users', back_populates='cases')
     
     # Beziehung zum zugewiesenen Benutzer
     assigned_user = db.relationship("User", foreign_keys=[assigned_user_id])
@@ -92,6 +96,12 @@ case_criteria = db.Table('case_criteria',
 case_technologies = db.Table('case_technologies',
     db.Column('case_id', db.Integer, db.ForeignKey('cases.id'), primary_key=True),
     db.Column('technology_id', db.Integer, db.ForeignKey('technologies.id'), primary_key=True)
+)
+
+# Neue Tabelle für die direkte Zuordnung von Benutzern zu Cases
+case_users = db.Table('case_users',
+    db.Column('case_id', db.Integer, db.ForeignKey('cases.id'), primary_key=True),
+    db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True)
 )
 
 class CaseRound(db.Model):

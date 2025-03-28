@@ -20,6 +20,7 @@ export default function CreateUserPage() {
     customFields: [] 
   });
   const [error, setError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     if (e.target.name.startsWith('customField')) {
@@ -132,13 +133,25 @@ export default function CreateUserPage() {
                 Password <span className="text-red-600">*</span>
               </label>
               <input
-                type="password"
+                type={showPassword ? "text" : "password"}
                 name="password"
                 value={formData.password}
                 onChange={handleChange}
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:ring-blue-500"
                 required
               />
+              <div className="mt-2 flex items-center">
+                <input
+                  id="show-password"
+                  type="checkbox"
+                  checked={showPassword}
+                  onChange={() => setShowPassword(!showPassword)}
+                  className="mr-2"
+                />
+                <label htmlFor="show-password" className="text-sm text-gray-700">
+                  Show password
+                </label>
+              </div>
             </div>
 
             <div>

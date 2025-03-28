@@ -37,6 +37,7 @@ export default function DashboardPage() {
     if (user && (user as AuthUser).user_id) {
       async function fetchAssignedCases() {
         try {
+          console.log(`Fetching assigned cases for user ID: ${(user as AuthUser).user_id}`);
           const res = await fetch(
             `http://localhost:9000/cases/assigned/${(user as AuthUser).user_id}`,
             {
@@ -47,14 +48,16 @@ export default function DashboardPage() {
             throw new Error("Error loading assigned cases");
           }
           const data = await res.json();
+          console.log("Assigned cases response:", data);
           setAssignedCases(data);
         } catch (error: any) {
-          console.error(error.message);
+          console.error("Error fetching assigned cases:", error.message);
         }
       }
 
       async function fetchCaseHistory() {
         try {
+          console.log(`Fetching case history for user ID: ${(user as AuthUser).user_id}`);
           const res = await fetch(
             `http://localhost:9000/cases/history/${(user as AuthUser).user_id}`,
             {
@@ -65,9 +68,10 @@ export default function DashboardPage() {
             throw new Error("Error loading case history");
           }
           const data = await res.json();
+          console.log("Case history response:", data);
           setCaseHistory(data);
         } catch (error: any) {
-          console.error(error.message);
+          console.error("Error fetching case history:", error.message);
         }
       }
 

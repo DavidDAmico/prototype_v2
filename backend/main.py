@@ -78,14 +78,12 @@ def create_app():
 
     # Blueprint-Registrierung (API-Routen)
     from src.routes.auth import auth_bp
-    from src.routes.projects import projects_bp
     from src.routes.cases import cases_bp
     from src.routes.admin import admin_bp  
     from src.routes.criteria import criteria_bp
     from src.routes.technologies import technologies_bp
 
     app.register_blueprint(auth_bp, url_prefix='/auth')
-    app.register_blueprint(projects_bp, url_prefix='/projects')
     app.register_blueprint(cases_bp, url_prefix='/cases')  
     app.register_blueprint(admin_bp, url_prefix='/admin')  
     app.register_blueprint(criteria_bp, url_prefix='/criteria')

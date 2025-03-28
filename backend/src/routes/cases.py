@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from src.models import db, Case, CaseRound, Project, User, ProjectUser, Criterion, Technology, Evaluation
+from src.models import db, Case, CaseRound, User, Criterion, Technology, Evaluation, case_users
 
 cases_bp = Blueprint('cases', __name__)
 
@@ -38,41 +38,28 @@ def get_round1_cases():
 def create_case():
         
     data = request.get_json()
-    project_id = data.get('project_id')
+    project_id = data.get('project_id', 1)  # Default-Wert 1 für Abwärtskompatibilität
     case_type = data.get('case_type')
     show_results = data.get('show_results', False)
     criteria_names = data.get('criteria', [])  # List of criterion names
     technology_names = data.get('technologies', [])  # List of technology names
     assigned_user_id = data.get('assigned_user_id')  # ID des zugewiesenen Benutzers
+    selected_users = data.get('selected_users', [])  # Liste aller ausgewählten Benutzer-IDs
 
     print(f"DEBUG: Received case creation request with data: {data}")
     print(f"DEBUG: Assigned user ID: {assigned_user_id}")
+    print(f"DEBUG: Selected users: {selected_users}")
 
-    if not project_id or not case_type:
-        return jsonify({"message": "project_id and case_type are required"}), 400
-
-    # Validate project exists
-    project = Project.query.get(project_id)
-    if not project:
-        print(f"DEBUG: Project {project_id} not found, creating default project")
-        default_master_id = 1  # Standard-Master-Benutzer
-        project = Project(
-            name="Default Project",
-            description="Automatisch erstellt, da kein Projekt mit der angegebenen ID existierte.",
-            master_id=default_master_id
-        )
-        db.session.add(project)
-        db.session.commit()
-        project_id = project.id
-        print(f"DEBUG: Created default project with ID {project_id}")
+    if not case_type:
+        return jsonify({"message": "case_type is required"}), 400
 
     try:
         # Create new case
         new_case = Case(
-            project_id=project_id,
+            project_id=project_id,  # Für Abwärtskompatibilität beibehalten
             case_type=case_type,
             show_results=show_results,
-            assigned_user_id=assigned_user_id  # Set the assigned user
+            assigned_user_id=assigned_user_id  # Hauptverantwortlicher Benutzer
         )
         db.session.add(new_case)
         db.session.flush()  # Get the case ID before committing
@@ -81,7 +68,7 @@ def create_case():
         for name in criteria_names:
             if name.strip():  # Skip empty names
                 criterion = Criterion(
-                    project_id=project_id,
+                    project_id=project_id,  # Für Abwärtskompatibilität beibehalten
                     name=name.strip()
                 )
                 db.session.add(criterion)
@@ -92,58 +79,32 @@ def create_case():
         for name in technology_names:
             if name.strip():  # Skip empty names
                 technology = Technology(
-                    project_id=project_id,
+                    project_id=project_id,  # Für Abwärtskompatibilität beibehalten
                     name=name.strip()
                 )
                 db.session.add(technology)
                 db.session.flush()  # Get the technology ID
                 new_case.technologies.append(technology)
 
-        # Add assigned user to project if not already a member
-        if assigned_user_id:
-            print(f"DEBUG: Adding assigned user {assigned_user_id} to project {project_id}")
-            existing_project_user = ProjectUser.query.filter_by(
-                project_id=project_id,
-                user_id=assigned_user_id
-            ).first()
-            
-            if not existing_project_user:
-                print(f"DEBUG: User {assigned_user_id} is not in project yet, adding...")
-                new_project_user = ProjectUser(
-                    project_id=project_id,
-                    user_id=assigned_user_id
-                )
-                db.session.add(new_project_user)
-            else:
-                print(f"DEBUG: User {assigned_user_id} is already in project {project_id}")
-
-        # Add all selected users to project
-        selected_users = request.json.get('selected_users', [])
+        # Alle ausgewählten Benutzer direkt dem Case zuweisen
         for user_id in selected_users:
-            if user_id != assigned_user_id:  # Skip if already added as assigned user
-                print(f"DEBUG: Adding selected user {user_id} to project {project_id}")
-                existing_project_user = ProjectUser.query.filter_by(
-                    project_id=project_id,
-                    user_id=user_id
-                ).first()
-                
-                if not existing_project_user:
-                    print(f"DEBUG: User {user_id} is not in project yet, adding...")
-                    new_project_user = ProjectUser(
-                        project_id=project_id,
-                        user_id=user_id
-                    )
-                    db.session.add(new_project_user)
-                else:
-                    print(f"DEBUG: User {user_id} is already in project {project_id}")
+            user = User.query.get(user_id)
+            if user:
+                print(f"DEBUG: Adding user {user_id} directly to case {new_case.id}")
+                new_case.users.append(user)
+            else:
+                print(f"DEBUG: User {user_id} not found, skipping")
 
         db.session.commit()
-        print(f"DEBUG: Successfully created case with ID {new_case.id} and assigned to user {assigned_user_id}")
+        print(f"DEBUG: Successfully created case with ID {new_case.id}")
+        print(f"DEBUG: Assigned users: {[u.id for u in new_case.users]}")
+        
         return jsonify({
             "message": "Case created successfully",
             "case_id": new_case.id,
-            "project_id": project_id,  # Return the actual project ID used
-            "assigned_user_id": assigned_user_id
+            "project_id": project_id,  # Für Abwärtskompatibilität beibehalten
+            "assigned_user_id": assigned_user_id,
+            "assigned_users": [u.id for u in new_case.users]
         }), 201
 
     except Exception as e:
@@ -548,9 +509,8 @@ def get_round_evaluations(case_id, round_id):
 def get_assigned_cases(user_id):
     """
     Gibt alle Cases zurück, die dem Benutzer zugewiesen sind.
-    Unabhängig von der Rolle werden beide Quellen kombiniert:
-      - Projekte, bei denen der User als Master geführt wird.
-      - Projekte, in denen der User als Teilnehmer (ProjectUser) eingetragen ist.
+    Ein Benutzer sieht NUR Cases, in denen er explizit in der case_users-Tabelle eingetragen ist
+    oder wenn er der assigned_user_id entspricht.
     """
     user_obj = User.query.get(user_id)
     if not user_obj:
@@ -558,34 +518,32 @@ def get_assigned_cases(user_id):
 
     print(f"DEBUG: User-ID {user_id} wird geprüft. Rolle: {user_obj.role}")
 
-    # Get cases where either:
-    # 1. The user is a master of the project
-    # 2. The user is a participant in the project
-    # 3. The case is directly assigned to the user
+    # Benutzer sehen nur Cases, denen sie explizit zugewiesen wurden
     cases = Case.query.filter(
         db.or_(
-            Case.project_id.in_(
-                db.session.query(Project.id).filter_by(master_id=user_id)
-            ),
-            Case.project_id.in_(
-                db.session.query(ProjectUser.project_id).filter_by(user_id=user_id)
-            ),
-            Case.assigned_user_id == user_id
+            Case.assigned_user_id == user_id,
+            Case.id.in_(
+                db.session.query(case_users.c.case_id).filter(case_users.c.user_id == user_id)
+            )
         )
     ).all()
 
     print(f"DEBUG: Found {len(cases)} cases for user {user_id}")
     for case in cases:
-        print(f"DEBUG: Case {case.id} - Project: {case.project_id}, Assigned User: {case.assigned_user_id}")
+        print(f"DEBUG: Case {case.id} - Assigned User: {case.assigned_user_id}")
+        # Prüfen, ob der Benutzer direkt dem Case zugewiesen ist
+        is_directly_assigned = user_id in [u.id for u in case.users]
+        print(f"DEBUG: User {user_id} is directly assigned to case {case.id}: {is_directly_assigned}")
 
     return jsonify([
         {
             "id": c.id,
-            "project_id": c.project_id,
+            "project_id": c.project_id,  # Wird noch beibehalten für Abwärtskompatibilität
             "case_type": c.case_type,
             "show_results": c.show_results,
             "created_at": c.created_at.isoformat() if c.created_at else None,
-            "assigned_user_id": c.assigned_user_id
+            "assigned_user_id": c.assigned_user_id,
+            "is_directly_assigned": user_id in [u.id for u in c.users]
         } for c in cases
     ]), 200
 
@@ -593,27 +551,42 @@ def get_assigned_cases(user_id):
 def get_case_history(user_id):
     """
     Gibt alle abgeschlossenen Cases zurück, d.h. jene, bei denen es mindestens einen CaseRound mit round_number == 2 gibt.
-    Die Zuweisung erfolgt analog wie bei get_assigned_cases.
+    Ein Benutzer sieht NUR Cases, in denen er explizit in der case_users-Tabelle eingetragen ist
+    oder wenn er der assigned_user_id entspricht.
     """
     user_obj = User.query.get(user_id)
     if not user_obj:
         return jsonify({"message": "User not found"}), 404
 
-    if user_obj.role == "master":
-        projects = Project.query.filter_by(master_id=user_id).all()
-        project_ids = [p.id for p in projects]
-    else:
-        assignments = ProjectUser.query.filter_by(user_id=user_id).all()
-        project_ids = [a.project_id for a in assignments]
+    print(f"DEBUG: User-ID {user_id} wird geprüft. Rolle: {user_obj.role}")
 
-    cases = Case.query.filter(Case.project_id.in_(project_ids)).all()
+    # Benutzer sehen nur Cases, denen sie explizit zugewiesen wurden
+    cases = Case.query.filter(
+        db.or_(
+            Case.assigned_user_id == user_id,
+            Case.id.in_(
+                db.session.query(case_users.c.case_id).filter(case_users.c.user_id == user_id)
+            )
+        )
+    ).all()
+
     completed_cases = [c for c in cases if any(r.round_number == 2 for r in c.rounds)]
+    
+    print(f"DEBUG: Found {len(completed_cases)} completed cases for user {user_id}")
+    for case in completed_cases:
+        print(f"DEBUG: Completed Case {case.id} - Assigned User: {case.assigned_user_id}")
+        # Prüfen, ob der Benutzer direkt dem Case zugewiesen ist
+        is_directly_assigned = user_id in [u.id for u in case.users]
+        print(f"DEBUG: User {user_id} is directly assigned to case {case.id}: {is_directly_assigned}")
+    
     return jsonify([
         {
             "id": c.id,
-            "project_id": c.project_id,
+            "project_id": c.project_id,  # Wird noch beibehalten für Abwärtskompatibilität
             "case_type": c.case_type,
             "show_results": c.show_results,
-            "created_at": c.created_at.isoformat() if c.created_at else None
+            "created_at": c.created_at.isoformat() if c.created_at else None,
+            "assigned_user_id": c.assigned_user_id,
+            "is_directly_assigned": user_id in [u.id for u in c.users]
         } for c in completed_cases
     ]), 200

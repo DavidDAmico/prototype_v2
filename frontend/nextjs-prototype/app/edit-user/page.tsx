@@ -33,6 +33,7 @@ export default function EditUserPage() {
   const [success, setSuccess] = useState("");
   const [search, setSearch] = useState("");
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // CSRF-Cookie lesen
@@ -344,12 +345,24 @@ export default function EditUserPage() {
                   New Password (optional)
                 </label>
                 <input
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   name="newPassword"
                   value={formData.newPassword}
                   onChange={handleChange}
                   className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:ring-blue-500"
                 />
+                <div className="mt-2 flex items-center">
+                  <input
+                    id="show-password"
+                    type="checkbox"
+                    checked={showPassword}
+                    onChange={() => setShowPassword(!showPassword)}
+                    className="mr-2"
+                  />
+                  <label htmlFor="show-password" className="text-sm text-gray-700">
+                    Show password
+                  </label>
+                </div>
               </div>
 
               {/* Custom Fields Section */}

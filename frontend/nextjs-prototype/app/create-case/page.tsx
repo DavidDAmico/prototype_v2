@@ -34,7 +34,7 @@ export default function CreateCasePage() {
   const [technologies, setTechnologies] = useState<string[]>([""]);
 
   const [isLoading, setIsLoading] = useState(false);
-  const [projectId, setProjectId] = useState<number>(2); // Default to our created project ID
+  const [projectId, setProjectId] = useState<number>(1); // Default-Wert 1 für Abwärtskompatibilität
 
   // State für die Bestätigung der Daten
   const [isDataConfirmed, setIsDataConfirmed] = useState(false);
@@ -217,33 +217,33 @@ export default function CreateCasePage() {
     fetchUsers();
   }, []);
 
-  // Fetch projects on component mount
-  useEffect(() => {
-    async function fetchProjects() {
-      try {
-        setIsLoading(true);
-        const res = await fetch("http://localhost:9000/projects/", {
-          credentials: "include",
-        });
+  // Projekt-ID wird nicht mehr vom Backend abgerufen, sondern ist fest auf 1 gesetzt
+  // useEffect(() => {
+  //   async function fetchProjects() {
+  //     try {
+  //       setIsLoading(true);
+  //       const res = await fetch("http://localhost:9000/projects/", {
+  //         credentials: "include",
+  //       });
         
-        if (res.ok) {
-          const projects = await res.json();
-          if (projects && projects.length > 0) {
-            setProjectId(projects[0].id);
-            console.log("Using project ID:", projects[0].id);
-          } else {
-            console.log("No projects found, using default project ID:", projectId);
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching projects:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    }
+  //       if (res.ok) {
+  //         const projects = await res.json();
+  //         if (projects && projects.length > 0) {
+  //           setProjectId(projects[0].id);
+  //           console.log("Using project ID:", projects[0].id);
+  //         } else {
+  //           console.log("No projects found, using default project ID:", projectId);
+  //         }
+  //       }
+  //     } catch (error) {
+  //       console.error("Error fetching projects:", error);
+  //     } finally {
+  //       setIsLoading(false);
+  //     }
+  //   }
 
-    fetchProjects();
-  }, []);
+  //   fetchProjects();
+  // }, []);
 
   // Dynamisches Hinzufügen/Entfernen von Kriterien
   function addCriterion() {
