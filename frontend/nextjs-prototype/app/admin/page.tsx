@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { ChartBarIcon, ChartPieIcon } from "@heroicons/react/24/outline";
 
 export default function AdminDashboard() {
   return (
@@ -70,6 +71,24 @@ export default function AdminDashboard() {
               />
             </div>
             <span>Edit a case</span>
+          </Link>
+          <Link
+            href="/admin/cases-overview"
+            className="flex items-center gap-2 px-4 py-2 bg-white text-black rounded hover:bg-gray-200 transition text-center"
+          >
+            <div className="w-8 flex justify-start">
+              <ChartBarIcon className="w-5 h-5 text-blue-600" />
+            </div>
+            <span>Cases Overview</span>
+          </Link>
+          <Link
+            href="/admin/round-analysis"
+            className="flex items-center gap-2 px-4 py-2 bg-white text-black rounded hover:bg-gray-200 transition text-center"
+          >
+            <div className="w-8 flex justify-start">
+              <ChartPieIcon className="w-5 h-5 text-blue-600" />
+            </div>
+            <span>Round Analysis</span>
           </Link>
         </div>
       </div>

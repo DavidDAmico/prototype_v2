@@ -28,6 +28,7 @@ werkzeug = "==3.0.4"
 pytz = "==2024.2"
 flask-sqlalchemy = "*"
 flask-jwt-extended = "*"
+numpy = "*"
 
 [dev-packages]
 

@@ -68,6 +68,10 @@ export default function EditCasePage({
     criteriaEvaluations: any[];
     techMatrixEvaluations: any[];
   }>({ criteriaEvaluations: [], techMatrixEvaluations: [] });
+  const [evaluationsToRedo, setEvaluationsToRedo] = useState<{
+    criteria: number[];
+    techMatrix: {techId: number, criterionId: number}[]
+  }>({ criteria: [], techMatrix: [] });
 
   const handleCriterionRating = (criterionId: number, rating: number) => {
     if (!data) return;
@@ -112,6 +116,12 @@ export default function EditCasePage({
 
         const caseData = await response.json();
         console.log("[Page] Fetched case data:", caseData);
+        
+        // Aktuelle Runde setzen
+        if (caseData.current_round) {
+          setCurrentRound(caseData.current_round);
+          console.log("[Page] Current round set to:", caseData.current_round);
+        }
 
         // 2. Hole existierende Bewertungen
         const evaluationsResponse = await fetch(`http://localhost:9000/cases/${id}/evaluations`, {
@@ -177,6 +187,38 @@ export default function EditCasePage({
           criteriaEvaluations: filteredCriteriaEvals,
           techMatrixEvaluations: filteredTechMatrixEvals
         });
+
+        // 3. Wenn wir in Runde > 1 sind, hole die Bewertungen, die neu bewertet werden müssen
+        if (caseData.current_round > 1 && user) {
+          try {
+            const reevalResponse = await fetch(`http://localhost:9000/cases/${id}/reevaluations/${user.user_id}`, {
+              credentials: 'include',
+            });
+            
+            if (reevalResponse.ok) {
+              const reevalData = await reevalResponse.json();
+              
+              // Extrahiere die IDs der Kriterien und Technologie-Kriterium-Kombinationen, die neu bewertet werden müssen
+              const criteriaToRedo = reevalData
+                .filter((evaluation: any) => evaluation.technology_id === null)
+                .map((evaluation: any) => evaluation.criterion_id);
+              
+              const techMatrixToRedo = reevalData
+                .filter((evaluation: any) => evaluation.technology_id !== null)
+                .map((evaluation: any) => ({
+                  techId: evaluation.technology_id,
+                  criterionId: evaluation.criterion_id
+                }));
+              
+              setEvaluationsToRedo({
+                criteria: criteriaToRedo,
+                techMatrix: techMatrixToRedo
+              });
+            }
+          } catch (error) {
+            console.error("Error fetching reevaluations:", error);
+          }
+        }
 
         // Create criteria array with ratings
         const criteria = caseData.criteria.map((c: any) => {
@@ -287,49 +329,98 @@ export default function EditCasePage({
     );
   };
 
+  // Hilfsfunktion, um zu prüfen, ob ein Kriterium in der aktuellen Runde neu bewertet werden muss
+  const needsReevaluation = (criterionId: number, techId?: number) => {
+    if (currentRound <= 1) return false;
+    
+    if (techId) {
+      return evaluationsToRedo.techMatrix.some(item => 
+        item.criterionId === criterionId && item.techId === techId
+      );
+    } else {
+      return evaluationsToRedo.criteria.includes(criterionId);
+    }
+  };
+
   const handleSave = async () => {
     if (!user || !data) return;
 
     try {
       console.log('[Page] Saving evaluations:', evaluations);
-      
+      setIsSaving(true);
+      setErrorMessage('');
+      setSuccessMessage('');
+
+      // Vorbereiten der Bewertungen für das Speichern
+      const criteriaEvals = data.criteria
+        .filter(c => c.rating !== null && c.rating !== undefined && c.rating > 0)
+        .map(c => ({
+          user_id: user.user_id,
+          criterion_id: c.id,
+          score: c.rating || 0,
+          round: currentRound
+        }));
+
+      // Vorbereiten der Tech-Matrix-Bewertungen
+      const techMatrixEvals = [];
+      for (const techId in techMatrix) {
+        for (const criterionId in techMatrix[techId]) {
+          const score = techMatrix[techId][criterionId];
+          if (score > 0) {
+            techMatrixEvals.push({
+              user_id: user.user_id,
+              criterion_id: parseInt(criterionId),
+              technology_id: parseInt(techId),
+              score,
+              round: currentRound
+            });
+          }
+        }
+      }
+
+      // Alle Bewertungen zusammenführen
+      const allEvaluations = [...criteriaEvals, ...techMatrixEvals];
+
+      // Bewertungen speichern
       const response = await fetch(`http://localhost:9000/cases/${id}/evaluations`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json',
         },
-        mode: 'cors',
         credentials: 'include',
-        body: JSON.stringify({ 
-          evaluations: [
-            ...evaluations.criteriaEvaluations,
-            ...evaluations.techMatrixEvaluations
-          ] 
+        body: JSON.stringify({
+          evaluations: allEvaluations
         })
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to save evaluations: ${response.status}`);
+        throw new Error(`Error saving evaluations: ${response.status} ${response.statusText}`);
       }
-      
+
       setSuccessMessage('Evaluations saved successfully');
-      
-      // Bei Erfolg zur Success-Page weiterleiten
-      router.push(`/success?action=evaluateCase&caseId=${id}&roundId=${currentRound}`);
-    } catch (apiError) {
-      console.error('[Page] API Error:', apiError);
-      
-      // WORKAROUND: Speichere die Bewertungen im localStorage
-      try {
-        const storageKey = `case_${id}_evaluations_user_${user.user_id}_round_${currentRound}`;
-        localStorage.setItem(storageKey, JSON.stringify(evaluations));
-        console.log('[Page] Evaluations saved to localStorage as fallback');
-        setSuccessMessage('Evaluations saved locally (Backend not available)');
-      } catch (storageError) {
-        console.error('[Page] Storage Error:', storageError);
-        throw apiError; // Wirf den ursprünglichen Fehler
+
+      // Prüfen, ob alle Benutzer ihre Bewertungen abgeschlossen haben
+      // und ob wir die Rundenanalyse starten können
+      if (user.role === 'master') {
+        // Hole aktuelle Case-Daten, um zu prüfen, ob alle Benutzer bewertet haben
+        const caseResponse = await fetch(`http://localhost:9000/cases/${id}`, {
+          credentials: 'include',
+        });
+        
+        if (caseResponse.ok) {
+          const updatedCaseData = await caseResponse.json();
+          const allUsersEvaluated = updatedCaseData.users?.every((u: any) => u.has_evaluated);
+          
+          if (allUsersEvaluated) {
+            setSuccessMessage('All users have completed their evaluations. You can now analyze this round.');
+          }
+        }
       }
+    } catch (error: any) {
+      console.error('[Page] Error saving evaluations:', error);
+      setErrorMessage(error.message);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -512,10 +603,17 @@ export default function EditCasePage({
               {step === 'criteria' ? (
                 <div>
                   <h2 className="text-lg font-medium mb-6">Criteria Evaluation</h2>
-                  {data.criteria.map((criterion) => (
+                  {data.criteria
+                    .filter(criterion => currentRound === 1 || needsReevaluation(criterion.id))
+                    .map((criterion) => (
                     <div key={criterion.id} className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className={`block text-sm font-medium mb-1 ${needsReevaluation(criterion.id) ? 'text-orange-700' : 'text-gray-700'}`}>
                         {criterion.name}
+                        {needsReevaluation(criterion.id) && (
+                          <span className="ml-2 px-2 py-0.5 bg-orange-100 text-orange-700 text-xs rounded-full">
+                            Needs reevaluation in Round {currentRound}
+                          </span>
+                        )}
                       </label>
                       {renderLikertScale(criterion)}
                     </div>
@@ -537,10 +635,17 @@ export default function EditCasePage({
                   <h2 className="text-lg font-medium mb-6">
                     Rate {data.technologies[currentTechIndex].name}
                   </h2>
-                  {data.criteria.map((criterion) => (
+                  {data.criteria
+                    .filter(criterion => currentRound === 1 || needsReevaluation(criterion.id, data.technologies[currentTechIndex].id))
+                    .map((criterion) => (
                     <div key={criterion.id} className="mb-4">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className={`block text-sm font-medium mb-1 ${needsReevaluation(criterion.id, data.technologies[currentTechIndex].id) ? 'text-orange-700' : 'text-gray-700'}`}>
                         {criterion.name}
+                        {needsReevaluation(criterion.id, data.technologies[currentTechIndex].id) && (
+                          <span className="ml-2 px-2 py-0.5 bg-orange-100 text-orange-700 text-xs rounded-full">
+                            Needs reevaluation in Round {currentRound}
+                          </span>
+                        )}
                       </label>
                       {renderTechLikertScale(data.technologies[currentTechIndex].id, criterion.id)}
                     </div>

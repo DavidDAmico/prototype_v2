@@ -1,5 +1,8 @@
 from flask import Blueprint, request, jsonify
-from src.models import db, Case, CaseRound, User, Criterion, Technology, Evaluation, case_users
+from src.models import db, Case, CaseRound, User, Criterion, Technology, Evaluation, case_users, RoundAnalysis
+import numpy as np
+from sqlalchemy import and_
+from sqlalchemy.sql import func
 
 cases_bp = Blueprint('cases', __name__)
 
@@ -46,11 +49,17 @@ def create_case():
     assigned_user_id = data.get('assigned_user_id')  # ID des zugewiesenen Benutzers
     selected_users = data.get('selected_users', [])  # Liste aller ausgewählten Benutzer-IDs
     case_name = data.get('name')  # Name des Cases
+    
+    # Grenzwerte für die Rundenanalyse
+    threshold_distance_mean = data.get('threshold_distance_mean', 0.166667)  # Standardwert 1/6
+    threshold_criteria_percent = data.get('threshold_criteria_percent', 75.0)  # Standardwert 75%
+    threshold_tech_percent = data.get('threshold_tech_percent', 75.0)  # Standardwert 75%
 
     print(f"DEBUG: Received case creation request with data: {data}")
     print(f"DEBUG: Assigned user ID: {assigned_user_id}")
     print(f"DEBUG: Selected users: {selected_users}")
     print(f"DEBUG: Case name: {case_name}")
+    print(f"DEBUG: Thresholds: {threshold_distance_mean}, {threshold_criteria_percent}, {threshold_tech_percent}")
 
     if not case_type:
         return jsonify({"message": "case_type is required"}), 400
@@ -62,7 +71,11 @@ def create_case():
             case_type=case_type,
             show_results=show_results,
             assigned_user_id=assigned_user_id,  # Hauptverantwortlicher Benutzer
-            name=case_name  # Name des Cases
+            name=case_name,  # Name des Cases
+            threshold_distance_mean=threshold_distance_mean,
+            threshold_criteria_percent=threshold_criteria_percent,
+            threshold_tech_percent=threshold_tech_percent,
+            current_round=1  # Neue Cases starten immer mit Runde 1
         )
         db.session.add(new_case)
         db.session.flush()  # Get the case ID before committing
@@ -185,7 +198,8 @@ def get_case(case_id):
             "criteria": criteria,
             "technologies": technologies,
             "rounds": rounds,
-            "users": users
+            "users": users,
+            "current_round": case.current_round  # Aktuelle Runde hinzufügen
         })
         
         response.headers.add('Access-Control-Allow-Origin', 'http://localhost:3000')
@@ -581,7 +595,8 @@ def get_assigned_cases(user_id):
 @cases_bp.route('/history/<int:user_id>', methods=['GET'])
 def get_case_history(user_id):
     """
-    Gibt alle abgeschlossenen Cases zurück, d.h. jene, bei denen es mindestens einen CaseRound mit round_number == 2 gibt.
+    Gibt alle abgeschlossenen Cases zurück, d.h. jene, bei denen die letzte Rundenanalyse bestanden wurde
+    und keine weiteren Bewertungen mehr erforderlich sind.
     Ein Benutzer sieht NUR Cases, in denen er explizit in der case_users-Tabelle eingetragen ist
     oder wenn er der assigned_user_id entspricht.
     """
@@ -601,7 +616,15 @@ def get_case_history(user_id):
         )
     ).all()
 
-    completed_cases = [c for c in cases if any(r.round_number == 2 for r in c.rounds)]
+    # Ein Case gilt als abgeschlossen, wenn die letzte Rundenanalyse bestanden wurde
+    completed_cases = []
+    for case in cases:
+        # Letzte Rundenanalyse für diesen Case abrufen
+        latest_analysis = RoundAnalysis.query.filter_by(case_id=case.id).order_by(RoundAnalysis.round_number.desc()).first()
+        
+        # Case ist abgeschlossen, wenn die letzte Analyse bestanden wurde
+        if latest_analysis and latest_analysis.passed_analysis:
+            completed_cases.append(case)
     
     print(f"DEBUG: Found {len(completed_cases)} completed cases for user {user_id}")
     for case in completed_cases:
@@ -622,3 +645,402 @@ def get_case_history(user_id):
             "name": c.name if c.name else f"Case {c.id}"  # Name des Cases hinzufügen
         } for c in completed_cases
     ]), 200
+
+@cases_bp.route('/admin/overview', methods=['GET'])
+def get_cases_overview():
+    """
+    Gibt eine detaillierte Übersicht über alle Cases zurück, einschließlich Informationen darüber,
+    welche Benutzer die Bewertung abgeschlossen haben, welche noch dabei sind und welche noch nicht begonnen haben.
+    Diese Route ist nur für Master-Benutzer zugänglich.
+    """
+    try:
+        # Alle Cases abrufen
+        cases = Case.query.all()
+        
+        # Ergebnis-Array vorbereiten
+        result = []
+        
+        for case in cases:
+            # Alle diesem Case zugewiesenen Benutzer
+            assigned_users = case.users
+            assigned_user_ids = [u.id for u in assigned_users]
+            
+            # Informationen über die Bewertungen für diesen Case sammeln
+            user_evaluation_status = []
+            
+            for user in assigned_users:
+                # Alle Bewertungen dieses Benutzers für diesen Case direkt abrufen
+                evaluations = Evaluation.query.filter_by(
+                    case_id=case.id,
+                    user_id=user.id,
+                    round=case.current_round  # Nach aktueller Runde filtern
+                ).all()
+                
+                # Debug-Ausgabe
+                print(f"DEBUG: Case {case.id}, User {user.id}, Current Round {case.current_round}, Evaluations count: {len(evaluations)}")
+                
+                # Anzahl der Kriterien und Technologien für diesen Case
+                criteria_count = len(case.criteria)
+                tech_count = len(case.technologies)
+                
+                # Gesamtzahl der möglichen Bewertungen (Kriterien + Kriterien*Technologien)
+                total_possible_evaluations = criteria_count + (criteria_count * tech_count)
+                
+                # Zähle Kriterien- und Technologie-Matrix-Bewertungen separat
+                criteria_evaluations = [e for e in evaluations if e.technology_id is None]
+                tech_matrix_evaluations = [e for e in evaluations if e.technology_id is not None]
+                
+                # Bewertungsstatus bestimmen
+                if len(evaluations) == 0:
+                    status = "not_started"
+                elif len(evaluations) < total_possible_evaluations:
+                    status = "in_progress"
+                else:
+                    status = "completed"
+                
+                user_evaluation_status.append({
+                    "user_id": user.id,
+                    "username": user.username,
+                    "status": status,
+                    "evaluations_completed": len(evaluations),
+                    "total_evaluations": total_possible_evaluations,
+                    "criteria_completed": len(criteria_evaluations),
+                    "criteria_total": criteria_count,
+                    "tech_matrix_completed": len(tech_matrix_evaluations),
+                    "tech_matrix_total": criteria_count * tech_count
+                })
+            
+            # Case-Informationen mit Bewertungsstatus zusammenführen
+            case_info = {
+                "id": case.id,
+                "name": case.name if case.name else f"Case {case.id}",
+                "case_type": case.case_type,
+                "created_at": case.created_at.isoformat() if case.created_at else None,
+                "criteria_count": len(case.criteria),
+                "technologies_count": len(case.technologies),
+                "assigned_users": user_evaluation_status
+            }
+            
+            result.append(case_info)
+        
+        return jsonify(result), 200
+    except Exception as e:
+        print(f"Error in get_cases_overview: {str(e)}")
+        return jsonify({"message": f"Error fetching cases overview: {str(e)}"}), 500
+
+@cases_bp.route('/<int:case_id>/analyze-round', methods=['POST'])
+def analyze_round(case_id):
+    """
+    Analysiert die Bewertungen einer Runde für einen Case und entscheidet, ob eine weitere Runde erforderlich ist.
+    Berechnet:
+    1. Prozentsatz der Kriterien, die im grünen Bereich sind (> threshold_criteria_percent)
+    2. Prozentsatz der Technologie-Matrix-Bewertungen, die im grünen Bereich sind (> threshold_tech_percent)
+    3. Mittelwertabweichung (< threshold_distance_mean)
+    
+    Wenn alle drei Werte im grünen Bereich sind, wird die Runde als bestanden markiert.
+    Andernfalls wird eine neue Runde erstellt und die Bewertungen, die nicht im grünen Bereich sind,
+    werden für die Neubewertung markiert.
+    """
+    try:
+        # Case abrufen
+        case = Case.query.get(case_id)
+        if not case:
+            return jsonify({"message": "Case not found"}), 404
+        
+        # Aktuelle Runde bestimmen
+        current_round = case.current_round
+        
+        # Grenzwerte aus dem Case abrufen
+        threshold_distance_mean = case.threshold_distance_mean
+        threshold_criteria_percent = case.threshold_criteria_percent
+        threshold_tech_percent = case.threshold_tech_percent
+        
+        # Alle Benutzer für diesen Case abrufen
+        users = case.users
+        
+        # Alle Kriterien und Technologien für diesen Case abrufen
+        criteria = case.criteria
+        technologies = case.technologies
+        
+        # Prüfen, ob alle Benutzer alle Bewertungen abgeschlossen haben
+        total_expected_evaluations = len(users) * (len(criteria) + len(criteria) * len(technologies))
+        actual_evaluations = Evaluation.query.filter_by(case_id=case_id, round=current_round).count()
+        
+        if actual_evaluations < total_expected_evaluations:
+            return jsonify({
+                "message": "Cannot analyze round: Not all users have completed their evaluations",
+                "completed_evaluations": actual_evaluations,
+                "total_expected_evaluations": total_expected_evaluations
+            }), 400
+        
+        # Statistiken initialisieren
+        criteria_ok_count = 0
+        criteria_total_count = len(criteria) * len(users)
+        tech_ok_count = 0
+        tech_total_count = len(criteria) * len(technologies) * len(users)
+        
+        # Für jeden Benutzer die Bewertungen analysieren
+        for user in users:
+            # Kriterien-Bewertungen analysieren
+            for criterion in criteria:
+                # Bewertungen aller Benutzer für dieses Kriterium abrufen
+                all_criterion_evals = Evaluation.query.filter_by(
+                    case_id=case_id,
+                    criterion_id=criterion.id,
+                    technology_id=None,
+                    round=current_round
+                ).all()
+                
+                # Scores extrahieren
+                scores = [float(eval.score) for eval in all_criterion_evals]
+                
+                if len(scores) > 0:
+                    # Mittelwert berechnen
+                    mean_score = np.mean(scores)
+                    
+                    # Bewertung des aktuellen Benutzers abrufen
+                    user_eval = Evaluation.query.filter_by(
+                        case_id=case_id,
+                        user_id=user.id,
+                        criterion_id=criterion.id,
+                        technology_id=None,
+                        round=current_round
+                    ).first()
+                    
+                    if user_eval:
+                        # Abweichung vom Mittelwert berechnen
+                        user_score = float(user_eval.score)
+                        distance = abs(user_score - mean_score)
+                        
+                        # Prüfen, ob die Bewertung im grünen Bereich ist
+                        if distance <= threshold_distance_mean:
+                            criteria_ok_count += 1
+                            # Bewertung für die nächste Runde als "nicht zu bewerten" markieren
+                            user_eval.needs_reevaluation = False
+                        else:
+                            # Bewertung für die nächste Runde als "zu bewerten" markieren
+                            user_eval.needs_reevaluation = True
+            
+            # Technologie-Matrix-Bewertungen analysieren
+            for technology in technologies:
+                for criterion in criteria:
+                    # Bewertungen aller Benutzer für diese Technologie-Kriterium-Kombination abrufen
+                    all_tech_evals = Evaluation.query.filter_by(
+                        case_id=case_id,
+                        criterion_id=criterion.id,
+                        technology_id=technology.id,
+                        round=current_round
+                    ).all()
+                    
+                    # Scores extrahieren
+                    scores = [float(eval.score) for eval in all_tech_evals]
+                    
+                    if len(scores) > 0:
+                        # Mittelwert berechnen
+                        mean_score = np.mean(scores)
+                        
+                        # Bewertung des aktuellen Benutzers abrufen
+                        user_eval = Evaluation.query.filter_by(
+                            case_id=case_id,
+                            user_id=user.id,
+                            criterion_id=criterion.id,
+                            technology_id=technology.id,
+                            round=current_round
+                        ).first()
+                        
+                        if user_eval:
+                            # Abweichung vom Mittelwert berechnen
+                            user_score = float(user_eval.score)
+                            distance = abs(user_score - mean_score)
+                            
+                            # Prüfen, ob die Bewertung im grünen Bereich ist
+                            if distance <= threshold_distance_mean:
+                                tech_ok_count += 1
+                                # Bewertung für die nächste Runde als "nicht zu bewerten" markieren
+                                user_eval.needs_reevaluation = False
+                            else:
+                                # Bewertung für die nächste Runde als "zu bewerten" markieren
+                                user_eval.needs_reevaluation = True
+        
+        # Prozentsätze berechnen
+        criteria_ok_percent = (criteria_ok_count / criteria_total_count * 100) if criteria_total_count > 0 else 0
+        tech_ok_percent = (tech_ok_count / tech_total_count * 100) if tech_total_count > 0 else 0
+        
+        # Prüfen, ob alle Werte im grünen Bereich sind
+        criteria_passed = criteria_ok_percent >= threshold_criteria_percent
+        tech_passed = tech_ok_percent >= threshold_tech_percent
+        
+        # Mittelwertabweichung berechnen (vereinfacht als Durchschnitt der beiden Prozentsätze)
+        mean_distance_value = (criteria_ok_percent + tech_ok_percent) / 2
+        mean_distance_ok = mean_distance_value >= (threshold_criteria_percent + threshold_tech_percent) / 2
+        
+        # Gesamtergebnis
+        passed_analysis = criteria_passed and tech_passed and mean_distance_ok
+        
+        # Analyseergebnis speichern
+        analysis = RoundAnalysis(
+            case_id=case_id,
+            round_number=current_round,
+            criteria_ok_percent=criteria_ok_percent,
+            criteria_total_count=criteria_total_count,
+            criteria_ok_count=criteria_ok_count,
+            tech_ok_percent=tech_ok_percent,
+            tech_total_count=tech_total_count,
+            tech_ok_count=tech_ok_count,
+            mean_distance_ok=mean_distance_ok,
+            mean_distance_value=mean_distance_value,
+            passed_analysis=passed_analysis
+        )
+        db.session.add(analysis)
+        
+        # Wenn die Analyse nicht bestanden wurde, eine neue Runde erstellen
+        if not passed_analysis:
+            # Runde erhöhen
+            case.current_round += 1
+            new_round_number = case.current_round
+            
+            # Neue CaseRound erstellen
+            new_round = CaseRound(
+                case_id=case_id,
+                round_number=new_round_number,
+                is_completed=False
+            )
+            db.session.add(new_round)
+        
+        db.session.commit()
+        
+        # Ergebnis zurückgeben
+        return jsonify({
+            "case_id": case_id,
+            "round_number": current_round,
+            "criteria_ok_percent": criteria_ok_percent,
+            "criteria_passed": criteria_passed,
+            "tech_ok_percent": tech_ok_percent,
+            "tech_passed": tech_passed,
+            "mean_distance_ok": mean_distance_ok,
+            "mean_distance_value": mean_distance_value,
+            "passed_analysis": passed_analysis,
+            "next_round": None if passed_analysis else case.current_round
+        }), 200
+    
+    except Exception as e:
+        print(f"Error in analyze_round: {str(e)}")
+        db.session.rollback()
+        return jsonify({"message": f"Error analyzing round: {str(e)}"}), 500
+
+@cases_bp.route('/<int:case_id>/round-analysis', methods=['GET'])
+def get_round_analysis(case_id):
+    """
+    Gibt die Analyseergebnisse für alle Runden eines Cases zurück.
+    """
+    try:
+        # Case abrufen
+        case = Case.query.get(case_id)
+        if not case:
+            return jsonify({"message": "Case not found"}), 404
+        
+        # Alle Analysen für diesen Case abrufen
+        analyses = RoundAnalysis.query.filter_by(case_id=case_id).order_by(RoundAnalysis.round_number).all()
+        
+        # Ergebnis formatieren
+        result = []
+        for analysis in analyses:
+            result.append({
+                "id": analysis.id,
+                "case_id": analysis.case_id,
+                "round_number": analysis.round_number,
+                "created_at": analysis.created_at.isoformat() if analysis.created_at else None,
+                "criteria_ok_percent": analysis.criteria_ok_percent,
+                "criteria_total_count": analysis.criteria_total_count,
+                "criteria_ok_count": analysis.criteria_ok_count,
+                "tech_ok_percent": analysis.tech_ok_percent,
+                "tech_total_count": analysis.tech_total_count,
+                "tech_ok_count": analysis.tech_ok_count,
+                "mean_distance_ok": analysis.mean_distance_ok,
+                "mean_distance_value": analysis.mean_distance_value,
+                "passed_analysis": analysis.passed_analysis
+            })
+        
+        return jsonify(result), 200
+    
+    except Exception as e:
+        print(f"Error in get_round_analysis: {str(e)}")
+        return jsonify({"message": f"Error fetching round analysis: {str(e)}"}), 500
+
+@cases_bp.route('/<int:case_id>/reevaluations/<int:user_id>', methods=['GET'])
+def get_user_reevaluations(case_id, user_id):
+    """
+    Gibt alle Bewertungen zurück, die ein Benutzer in der nächsten Runde neu bewerten muss.
+    """
+    try:
+        # Case abrufen
+        case = Case.query.get(case_id)
+        if not case:
+            return jsonify({"message": "Case not found"}), 404
+        
+        # Aktuelle Runde bestimmen
+        current_round = case.current_round
+        
+        # Alle Bewertungen abrufen, die neu bewertet werden müssen
+        reevaluations = Evaluation.query.filter_by(
+            case_id=case_id,
+            user_id=user_id,
+            round=current_round - 1,  # Bewertungen aus der vorherigen Runde
+            needs_reevaluation=True
+        ).all()
+        
+        # Ergebnis formatieren
+        result = []
+        for eval in reevaluations:
+            result.append({
+                "id": eval.id,
+                "case_id": eval.case_id,
+                "round": eval.round,
+                "user_id": eval.user_id,
+                "criterion_id": eval.criterion_id,
+                "technology_id": eval.technology_id,
+                "score": float(eval.score)
+            })
+        
+        return jsonify(result), 200
+    
+    except Exception as e:
+        print(f"Error in get_user_reevaluations: {str(e)}")
+        return jsonify({"message": f"Error fetching reevaluations: {str(e)}"}), 500
+
+@cases_bp.route('/<int:case_id>/update-thresholds', methods=['PUT'])
+def update_thresholds(case_id):
+    """
+    Aktualisiert die Grenzwerte für die Rundenanalyse eines Cases.
+    """
+    try:
+        # Case abrufen
+        case = Case.query.get(case_id)
+        if not case:
+            return jsonify({"message": "Case not found"}), 404
+        
+        data = request.get_json()
+        
+        # Grenzwerte aktualisieren, falls vorhanden
+        if 'threshold_distance_mean' in data:
+            case.threshold_distance_mean = data['threshold_distance_mean']
+        
+        if 'threshold_criteria_percent' in data:
+            case.threshold_criteria_percent = data['threshold_criteria_percent']
+        
+        if 'threshold_tech_percent' in data:
+            case.threshold_tech_percent = data['threshold_tech_percent']
+        
+        db.session.commit()
+        
+        return jsonify({
+            "id": case.id,
+            "threshold_distance_mean": case.threshold_distance_mean,
+            "threshold_criteria_percent": case.threshold_criteria_percent,
+            "threshold_tech_percent": case.threshold_tech_percent
+        }), 200
+    
+    except Exception as e:
+        print(f"Error in update_thresholds: {str(e)}")
+        db.session.rollback()
+        return jsonify({"message": f"Error updating thresholds: {str(e)}"}), 500

@@ -33,6 +33,11 @@ export default function CreateCasePage() {
   // Schritt 4: Technologien (dynamisch) – initial ein leeres Feld
   const [technologies, setTechnologies] = useState<string[]>([""]);
 
+  // Schritt 5: Grenzwerte für die Rundenanalyse
+  const [thresholdDistanceMean, setThresholdDistanceMean] = useState<number>(0.166667); // Standardwert 1/6
+  const [thresholdCriteriaPercent, setThresholdCriteriaPercent] = useState<number>(75); // Standardwert 75%
+  const [thresholdTechPercent, setThresholdTechPercent] = useState<number>(75); // Standardwert 75%
+
   const [isLoading, setIsLoading] = useState(false);
   const [projectId, setProjectId] = useState<number>(1); // Default-Wert 1 für Abwärtskompatibilität
 
@@ -51,6 +56,8 @@ export default function CreateCasePage() {
       case 4:
         return technologies.some(t => t.trim() !== "");
       case 5:
+        return thresholdDistanceMean > 0 && thresholdCriteriaPercent > 0 && thresholdTechPercent > 0;
+      case 6:
         return isDataConfirmed;
       default:
         return false;
@@ -59,14 +66,14 @@ export default function CreateCasePage() {
 
   // Prüfen ob alle Schritte komplett sind
   const areAllStepsComplete = () => {
-    return [1, 2, 3, 4, 5].every(step => isStepComplete(step));
+    return [1, 2, 3, 4, 5, 6].every(step => isStepComplete(step));
   };
 
   // Aktualisiere completed steps wenn sich relevante Daten ändern
   useEffect(() => {
-    const newCompletedSteps = [1, 2, 3, 4, 5].filter(stepNum => isStepComplete(stepNum));
+    const newCompletedSteps = [1, 2, 3, 4, 5, 6].filter(stepNum => isStepComplete(stepNum));
     setCompletedSteps(newCompletedSteps);
-  }, [caseName, selectedUsers, criteria, technologies, isDataConfirmed]);
+  }, [caseName, selectedUsers, criteria, technologies, thresholdDistanceMean, thresholdCriteriaPercent, thresholdTechPercent, isDataConfirmed]);
 
   // Validierung für Schritte
   const validateStep = (targetStep: number) => {
@@ -76,7 +83,7 @@ export default function CreateCasePage() {
 
   // Validierung beim Speichern
   const validateBeforeSave = () => {
-    const allStepsCompleted = [1, 2, 3, 4].every(stepNum => isStepComplete(stepNum));
+    const allStepsCompleted = [1, 2, 3, 4, 5].every(stepNum => isStepComplete(stepNum));
     if (!allStepsCompleted) {
       alert("Please fill in all required fields in all steps");
       return false;
@@ -90,7 +97,7 @@ export default function CreateCasePage() {
   }
 
   function nextStep() {
-    setStep((prev) => Math.min(prev + 1, 5));
+    setStep((prev) => Math.min(prev + 1, 6));
   }
 
   function prevStep() {
@@ -287,7 +294,10 @@ export default function CreateCasePage() {
       technologies: validTechnologies,
       name: caseName.trim(),
       assigned_user_id: assignedUserId,
-      selected_users: selectedUserIds
+      selected_users: selectedUserIds,
+      threshold_distance_mean: thresholdDistanceMean,
+      threshold_criteria_percent: thresholdCriteriaPercent,
+      threshold_tech_percent: thresholdTechPercent
     };
 
     console.log("Creating case with payload:", payload);
@@ -322,7 +332,7 @@ export default function CreateCasePage() {
 
       {/* Step Indicator */}
       <div className="flex items-center justify-center gap-2 mb-4">
-        {[1, 2, 3, 4, 5].map((num) => (
+        {[1, 2, 3, 4, 5, 6].map((num) => (
           <div
             key={num}
             onClick={() => goToStep(num)}
@@ -590,7 +600,74 @@ export default function CreateCasePage() {
       {step === 5 && (
         <div className="space-y-4">
           <div className="bg-blue-100 dark:bg-blue-950/30 rounded-lg shadow-sm border border-blue-200 dark:border-blue-900/40 p-6">
-            <p className="font-semibold mb-6">Step 5: Summary</p>
+            <p className="font-semibold mb-6">Step 5: Thresholds</p>
+            
+            <div className="grid grid-cols-2 gap-4">
+              {/* Threshold Distance Mean */}
+              <div className="bg-blue-100 dark:bg-blue-950/30 rounded-lg shadow-sm border border-blue-200 dark:border-blue-900/40 p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-medium">Threshold Distance Mean</h3>
+                </div>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">Value:</span>
+                    <span className="font-medium">{thresholdDistanceMean}</span>
+                  </div>
+                  <input
+                    type="number"
+                    value={thresholdDistanceMean}
+                    onChange={(e) => setThresholdDistanceMean(parseFloat(e.target.value))}
+                    className="w-full p-2 rounded border border-gray-300"
+                  />
+                </div>
+              </div>
+
+              {/* Threshold Criteria Percent */}
+              <div className="bg-blue-100 dark:bg-blue-950/30 rounded-lg shadow-sm border border-blue-200 dark:border-blue-900/40 p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-medium">Threshold Criteria Percent</h3>
+                </div>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">Value:</span>
+                    <span className="font-medium">{thresholdCriteriaPercent}</span>
+                  </div>
+                  <input
+                    type="number"
+                    value={thresholdCriteriaPercent}
+                    onChange={(e) => setThresholdCriteriaPercent(parseFloat(e.target.value))}
+                    className="w-full p-2 rounded border border-gray-300"
+                  />
+                </div>
+              </div>
+
+              {/* Threshold Tech Percent */}
+              <div className="bg-blue-100 dark:bg-blue-950/30 rounded-lg shadow-sm border border-blue-200 dark:border-blue-900/40 p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-medium">Threshold Tech Percent</h3>
+                </div>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">Value:</span>
+                    <span className="font-medium">{thresholdTechPercent}</span>
+                  </div>
+                  <input
+                    type="number"
+                    value={thresholdTechPercent}
+                    onChange={(e) => setThresholdTechPercent(parseFloat(e.target.value))}
+                    className="w-full p-2 rounded border border-gray-300"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {step === 6 && (
+        <div className="space-y-4">
+          <div className="bg-blue-100 dark:bg-blue-950/30 rounded-lg shadow-sm border border-blue-200 dark:border-blue-900/40 p-6">
+            <p className="font-semibold mb-6">Step 6: Summary</p>
             
             <div className="grid grid-cols-2 gap-4">
               {/* Case Information Frame */}
@@ -721,7 +798,7 @@ export default function CreateCasePage() {
         </button>
         <button
           type="button"
-          onClick={step === 5 && areAllStepsComplete() ? handleSubmit : nextStep}
+          onClick={step === 6 && areAllStepsComplete() ? handleSubmit : nextStep}
           disabled={!isStepComplete(step)}
           className={`px-4 py-2 rounded ${
             !isStepComplete(step)
@@ -729,7 +806,7 @@ export default function CreateCasePage() {
               : "bg-blue-500 hover:bg-blue-600 text-white"
           }`}
         >
-          {step === 5 ? "Create Case" : "Next"}
+          {step === 6 ? "Create Case" : "Next"}
         </button>
       </div>
     </div>

@@ -76,6 +76,11 @@ class Case(db.Model):
     created_at = db.Column(db.DateTime, server_default=db.func.now())
     assigned_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     name = db.Column(db.String(100), nullable=True)  # Name des Cases
+    # Grenzwerte für die Rundenanalyse
+    threshold_distance_mean = db.Column(db.Float, default=0.166667)  # Standardwert 1/6
+    threshold_criteria_percent = db.Column(db.Float, default=75.0)  # Standardwert 75%
+    threshold_tech_percent = db.Column(db.Float, default=75.0)  # Standardwert 75%
+    current_round = db.Column(db.Integer, default=1)  # Aktuelle Runde des Cases
 
     # Beziehung zu CaseRounds
     rounds = db.relationship("CaseRound", back_populates="case")
@@ -87,6 +92,9 @@ class Case(db.Model):
     
     # Beziehung zum zugewiesenen Benutzer
     assigned_user = db.relationship("User", foreign_keys=[assigned_user_id])
+
+    # Beziehung zu RoundAnalysis
+    analysis = db.relationship("RoundAnalysis", backref="case_ref")
 
 # Association tables for case-specific relationships
 case_criteria = db.Table('case_criteria',
@@ -111,6 +119,7 @@ class CaseRound(db.Model):
     case_id = db.Column(db.Integer, db.ForeignKey('cases.id'), nullable=False)
     round_number = db.Column(db.Integer, nullable=False)
     is_completed = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, server_default=db.func.now())
 
     # Beziehung zum Case
     case = db.relationship("Case", back_populates="rounds")
@@ -125,9 +134,37 @@ class Evaluation(db.Model):
     technology_id = db.Column(db.Integer, db.ForeignKey('technologies.id'), nullable=True)  # Nullable for regular criterion evaluations
     score = db.Column(db.Numeric(5,2), nullable=False)  # Bewertung zwischen 0 und 10
     created_at = db.Column(db.DateTime, server_default=db.func.now())
+    needs_reevaluation = db.Column(db.Boolean, default=False)  # Flag für Neubewertung in der nächsten Runde
 
     # Beziehung zum Kriterium
     criterion = db.relationship("Criterion", back_populates="evaluations")
+
+class RoundAnalysis(db.Model):
+    __tablename__ = 'round_analysis'
+    id = db.Column(db.Integer, primary_key=True)
+    case_id = db.Column(db.Integer, db.ForeignKey('cases.id'), nullable=False)
+    round_number = db.Column(db.Integer, nullable=False)
+    created_at = db.Column(db.DateTime, server_default=db.func.now())
+    
+    # Statistiken für Kriterien
+    criteria_ok_percent = db.Column(db.Float)
+    criteria_total_count = db.Column(db.Integer)
+    criteria_ok_count = db.Column(db.Integer)
+    
+    # Statistiken für Technologie-Matrix
+    tech_ok_percent = db.Column(db.Float)
+    tech_total_count = db.Column(db.Integer)
+    tech_ok_count = db.Column(db.Integer)
+    
+    # Gesamtstatistik für Mittelwertabweichung
+    mean_distance_ok = db.Column(db.Boolean, default=False)
+    mean_distance_value = db.Column(db.Float)
+    
+    # Gesamtergebnis
+    passed_analysis = db.Column(db.Boolean, default=False)
+
+    def __repr__(self):
+        return f"<RoundAnalysis Case {self.case_id} Round {self.round_number}>"
 
 # Neue Tabelle für die Token-Blacklist (persistente Speicherung)
 class TokenBlacklist(db.Model):
