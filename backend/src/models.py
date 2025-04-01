@@ -135,6 +135,11 @@ class Evaluation(db.Model):
     score = db.Column(db.Numeric(5,2), nullable=False)  # Bewertung zwischen 0 und 10
     created_at = db.Column(db.DateTime, server_default=db.func.now())
     needs_reevaluation = db.Column(db.Boolean, default=False)  # Flag für Neubewertung in der nächsten Runde
+    
+    # Fuzzy-Vektor für die Berechnung des "Distance to Mean"
+    fuzzy_vector_a = db.Column(db.Float, default=0.0)  # a-Wert des Fuzzy-Vektors
+    fuzzy_vector_b = db.Column(db.Float, default=0.0)  # b-Wert des Fuzzy-Vektors
+    fuzzy_vector_c = db.Column(db.Float, default=0.0)  # c-Wert des Fuzzy-Vektors
 
     # Beziehung zum Kriterium
     criterion = db.relationship("Criterion", back_populates="evaluations")

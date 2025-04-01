@@ -3,11 +3,17 @@
 import { useRouter } from 'next/navigation';
 import React, { useState, useEffect, use } from 'react';
 import useAuth from "../../../lib/useAuth";
-import LikertScale from "../../../components/LikertScale";
+import LikertScale, { FuzzyVector } from "../../../components/LikertScale";
 
 interface TechCriteriaMatrix {
   [techId: number]: {
     [criterionId: number]: number;
+  };
+}
+
+interface FuzzyTechCriteriaMatrix {
+  [techId: number]: {
+    [criterionId: number]: FuzzyVector;
   };
 }
 
@@ -59,6 +65,8 @@ export default function EditCasePage({
   const [currentTechIndex, setCurrentTechIndex] = useState(0);
   const [data, setData] = useState<Case | null>(null);
   const [techMatrix, setTechMatrix] = useState<TechCriteriaMatrix>({});
+  const [fuzzyTechMatrix, setFuzzyTechMatrix] = useState<FuzzyTechCriteriaMatrix>({});
+  const [fuzzyCriteriaVectors, setFuzzyCriteriaVectors] = useState<{[criterionId: number]: FuzzyVector}>({});
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -72,8 +80,15 @@ export default function EditCasePage({
     criteria: number[];
     techMatrix: {techId: number, criterionId: number}[]
   }>({ criteria: [], techMatrix: [] });
+  const [previousRoundEvaluations, setPreviousRoundEvaluations] = useState<{
+    criteriaEvaluations: any[];
+    techMatrixEvaluations: any[];
+  }>({
+    criteriaEvaluations: [],
+    techMatrixEvaluations: []
+  });
 
-  const handleCriterionRating = (criterionId: number, rating: number) => {
+  const handleCriterionRating = (criterionId: number, rating: number, fuzzyVector: FuzzyVector) => {
     if (!data) return;
 
     setData({
@@ -82,14 +97,30 @@ export default function EditCasePage({
         c.id === criterionId ? { ...c, rating } : c
       )
     });
+
+    // Speichere den Fuzzy-Vektor für dieses Kriterium
+    setFuzzyCriteriaVectors(prev => ({
+      ...prev,
+      [criterionId]: fuzzyVector
+    }));
   };
 
-  const handleTechCriterionRating = (techId: number, criterionId: number, rating: number) => {
+  const handleTechCriterionRating = (techId: number, criterionId: number, rating: number, fuzzyVector: FuzzyVector) => {
+    // Speichere den numerischen Wert
     setTechMatrix(prev => ({
       ...prev,
       [techId]: {
         ...(prev[techId] || {}),
         [criterionId]: rating
+      }
+    }));
+
+    // Speichere den Fuzzy-Vektor
+    setFuzzyTechMatrix(prev => ({
+      ...prev,
+      [techId]: {
+        ...(prev[techId] || {}),
+        [criterionId]: fuzzyVector
       }
     }));
   };
@@ -184,31 +215,32 @@ export default function EditCasePage({
         console.log("[Page] Fetched all evaluations:", allEvaluations);
         
         // Extrahiere die Arrays aus dem Objekt
-        const criteriaEvals = allEvaluations.criteriaEvaluations || [];
-        const techMatrixEvals = allEvaluations.techMatrixEvaluations || [];
+        const criteriaEvaluations = allEvaluations.criteriaEvaluations || [];
+        const techMatrixEvaluations = allEvaluations.techMatrixEvaluations || [];
         
         // Filtere Evaluationen nach aktuellem Benutzer und Runde
-        const filteredCriteriaEvals = criteriaEvals.filter((e: any) => 
-          e.user_id === user.user_id && 
-          String(e.round) === String(currentRound)
+        const filteredCriteriaEvaluations = criteriaEvaluations.filter((evaluation: any) => 
+          evaluation.user_id === user.user_id && 
+          String(evaluation.round) === String(currentRound)
         );
         
-        const filteredTechMatrixEvals = techMatrixEvals.filter((e: any) => 
-          e.user_id === user.user_id && 
-          String(e.round) === String(currentRound)
+        const filteredTechMatrixEvaluations = techMatrixEvaluations.filter((evaluation: any) => 
+          evaluation.user_id === user.user_id && 
+          String(evaluation.round) === String(currentRound)
         );
 
-        console.log("[Page] Criteria evaluations:", filteredCriteriaEvals);
-        console.log("[Page] Tech matrix evaluations:", filteredTechMatrixEvals);
+        console.log("[Page] Criteria evaluations:", filteredCriteriaEvaluations);
+        console.log("[Page] Tech matrix evaluations:", filteredTechMatrixEvaluations);
 
         setEvaluations({
-          criteriaEvaluations: filteredCriteriaEvals,
-          techMatrixEvaluations: filteredTechMatrixEvals
+          criteriaEvaluations: filteredCriteriaEvaluations,
+          techMatrixEvaluations: filteredTechMatrixEvaluations
         });
 
         // 3. Wenn wir in Runde > 1 sind, hole die Bewertungen, die neu bewertet werden müssen
         if (caseData.current_round > 1 && user) {
           try {
+            // Hole die Bewertungen, die neu bewertet werden müssen
             const reevalResponse = await fetch(`http://localhost:9000/cases/${id}/reevaluations/${user.user_id}`, {
               credentials: 'include',
             });
@@ -233,6 +265,29 @@ export default function EditCasePage({
                 techMatrix: techMatrixToRedo
               });
             }
+
+            // Hole auch die Bewertungen aus der vorherigen Runde, die NICHT neu bewertet werden müssen
+            const previousRoundResponse = await fetch(`http://localhost:9000/cases/${id}/evaluations?round=${caseData.current_round - 1}&user_id=${user.user_id}`, {
+              credentials: 'include',
+            });
+            
+            if (previousRoundResponse.ok) {
+              const previousRoundData = await previousRoundResponse.json();
+              
+              // Filtere die Bewertungen, die NICHT neu bewertet werden müssen
+              const previousCriteriaEvaluations = previousRoundData.criteriaEvaluations.filter(
+                (evaluation: any) => evaluation.needs_reevaluation === false
+              );
+              
+              const previousTechMatrixEvaluations = previousRoundData.techMatrixEvaluations.filter(
+                (evaluation: any) => evaluation.needs_reevaluation === false
+              );
+              
+              setPreviousRoundEvaluations({
+                criteriaEvaluations: previousCriteriaEvaluations,
+                techMatrixEvaluations: previousTechMatrixEvaluations
+              });
+            }
           } catch (error) {
             console.error("Error fetching reevaluations:", error);
           }
@@ -240,7 +295,7 @@ export default function EditCasePage({
 
         // Create criteria array with ratings
         const criteria = caseData.criteria.map((c: any) => {
-          const evaluation = filteredCriteriaEvals.find((e: any) => e.criterion_id === c.id);
+          const evaluation = filteredCriteriaEvaluations.find((evaluation: any) => evaluation.criterion_id === c.id);
           const rating = evaluation ? Number(evaluation.score) : 0;  
           console.log(`[Page] Setting rating for criterion ${c.id}:`, rating);
           return {
@@ -252,8 +307,8 @@ export default function EditCasePage({
         // Create tech matrix from evaluations
         const techMatrix = caseData.technologies.reduce((acc: any, tech: any) => {
           acc[tech.id] = caseData.criteria.reduce((criteriaAcc: any, criterion: any) => {
-            const evaluation = filteredTechMatrixEvals.find(
-              (e: any) => e.technology_id === tech.id && e.criterion_id === criterion.id
+            const evaluation = filteredTechMatrixEvaluations.find(
+              (evaluation: any) => evaluation.technology_id === tech.id && evaluation.criterion_id === criterion.id
             );
             criteriaAcc[criterion.id] = evaluation ? Number(evaluation.score) : 0;  
             return criteriaAcc;
@@ -285,13 +340,13 @@ export default function EditCasePage({
     if (!user || !data) return;
 
     // Sammle alle Bewertungen
-    const criteriaEvals = [];
-    const techMatrixEvals = [];
+    const criteriaEvaluations = [];
+    const techMatrixEvaluations = [];
 
     // Kriterien-Bewertungen
     for (const criterion of data.criteria) {
       if (criterion.rating && criterion.rating > 0) {
-        criteriaEvals.push({
+        criteriaEvaluations.push({
           user_id: user.user_id,
           criterion_id: criterion.id,
           technology_id: null,
@@ -307,7 +362,7 @@ export default function EditCasePage({
       for (const criterionId in techMatrix[techId]) {
         const rating = techMatrix[techId][criterionId];
         if (rating && rating > 0) {
-          techMatrixEvals.push({
+          techMatrixEvaluations.push({
             user_id: user.user_id,
             criterion_id: parseInt(criterionId),
             technology_id: parseInt(techId),
@@ -320,30 +375,42 @@ export default function EditCasePage({
     }
 
     setEvaluations({
-      criteriaEvaluations: criteriaEvals,
-      techMatrixEvaluations: techMatrixEvals
+      criteriaEvaluations,
+      techMatrixEvaluations
     });
   }, [user, data, techMatrix, id, currentRound]);
 
   const renderLikertScale = (criterion: any) => (
-    <LikertScale
-      key={criterion.id}
-      value={criterion.rating || 0}
-      onChange={(value) => handleCriterionRating(criterion.id, value)}
-      type="importance"
-    />
+    <div className="mt-2">
+      <LikertScale 
+        value={criterion.rating || (isCriterionLocked(criterion.id) ? getPreviousCriterionRating(criterion.id) : 0)} 
+        onChange={(value, fuzzyVector) => handleCriterionRating(criterion.id, value, fuzzyVector)}
+        type="importance"
+        locked={isCriterionLocked(criterion.id)}
+      />
+    </div>
   );
 
   const renderTechLikertScale = (techId: number, criterionId: number) => {
-    const value = techMatrix[techId]?.[criterionId] || 0;
-    console.log(`[Page] Rendering tech scale for tech ${techId}, criterion ${criterionId}, value:`, value);
+    console.log(`[Page] Rendering tech scale for tech ${techId}, criterion ${criterionId}, value: ${techMatrix[techId]?.[criterionId] || 0}`);
+    
+    // Bestimme den anzuzeigenden Wert
+    let displayValue = techMatrix[techId]?.[criterionId] || 0;
+    
+    // Wenn das Kriterium gesperrt ist, zeige den Wert aus der vorherigen Runde an
+    if (isTechCriterionLocked(techId, criterionId)) {
+      displayValue = getPreviousTechCriterionRating(techId, criterionId);
+    }
+    
     return (
-      <LikertScale
-        key={`${techId}-${criterionId}`}
-        value={value}
-        onChange={(value) => handleTechCriterionRating(techId, criterionId, value)}
-        type="importance"
-      />
+      <div className="mt-2">
+        <LikertScale
+          value={displayValue}
+          onChange={(value, fuzzyVector) => handleTechCriterionRating(techId, criterionId, value, fuzzyVector)}
+          type="performance"
+          locked={isTechCriterionLocked(techId, criterionId)}
+        />
+      </div>
     );
   };
 
@@ -360,6 +427,58 @@ export default function EditCasePage({
     }
   };
 
+  const shouldShowCriterion = (criterionId: number) => {
+    // In Runde 1 alle Kriterien anzeigen
+    if (currentRound === 1) return true;
+    
+    // In höheren Runden nur die Kriterien anzeigen, die neu bewertet werden müssen
+    // oder die bereits in einer früheren Runde bewertet wurden und nicht neu bewertet werden müssen
+    return evaluationsToRedo.criteria.includes(criterionId) || 
+           previousRoundEvaluations.criteriaEvaluations.some(e => e.criterion_id === criterionId);
+  };
+
+  const shouldShowTechCriterion = (techId: number, criterionId: number) => {
+    // In Runde 1 alle Tech-Kriterien anzeigen
+    if (currentRound === 1) return true;
+    
+    // In höheren Runden nur die Tech-Kriterien anzeigen, die neu bewertet werden müssen
+    // oder die bereits in einer früheren Runde bewertet wurden und nicht neu bewertet werden müssen
+    return evaluationsToRedo.techMatrix.some(tc => tc.techId === techId && tc.criterionId === criterionId) ||
+           previousRoundEvaluations.techMatrixEvaluations.some(e => e.technology_id === techId && e.criterion_id === criterionId);
+  };
+
+  const isCriterionLocked = (criterionId: number) => {
+    // In Runde 1 ist nichts gesperrt
+    if (currentRound === 1) return false;
+    
+    // In höheren Runden sind die Kriterien gesperrt, die bereits in einer früheren Runde bewertet wurden
+    // und nicht neu bewertet werden müssen
+    return previousRoundEvaluations.criteriaEvaluations.some(e => e.criterion_id === criterionId);
+  };
+
+  const isTechCriterionLocked = (techId: number, criterionId: number) => {
+    // In Runde 1 ist nichts gesperrt
+    if (currentRound === 1) return false;
+    
+    // In höheren Runden sind die Tech-Kriterien gesperrt, die bereits in einer früheren Runde bewertet wurden
+    // und nicht neu bewertet werden müssen
+    return previousRoundEvaluations.techMatrixEvaluations.some(e => e.technology_id === techId && e.criterion_id === criterionId);
+  };
+
+  const getPreviousCriterionRating = (criterionId: number) => {
+    // Suche die Bewertung in den vorherigen Runden
+    const previousEvaluation = previousRoundEvaluations.criteriaEvaluations.find(e => e.criterion_id === criterionId);
+    return previousEvaluation ? Number(previousEvaluation.score) : 0;
+  };
+
+  const getPreviousTechCriterionRating = (techId: number, criterionId: number) => {
+    // Suche die Bewertung in den vorherigen Runden
+    const previousEvaluation = previousRoundEvaluations.techMatrixEvaluations.find(
+      e => e.technology_id === techId && e.criterion_id === criterionId
+    );
+    return previousEvaluation ? Number(previousEvaluation.score) : 0;
+  };
+
   const handleSave = async () => {
     if (!user || !data) return;
 
@@ -370,34 +489,36 @@ export default function EditCasePage({
       setSuccessMessage('');
 
       // Vorbereiten der Bewertungen für das Speichern
-      const criteriaEvals = data.criteria
+      const criteriaEvaluations = data.criteria
         .filter(c => c.rating !== null && c.rating !== undefined && c.rating > 0)
         .map(c => ({
           user_id: user.user_id,
           criterion_id: c.id,
           score: c.rating || 0,
-          round: currentRound
+          round: currentRound,
+          fuzzy_vector: fuzzyCriteriaVectors[c.id] || { a: 0, b: 0, c: 0 } // Füge den Fuzzy-Vektor hinzu
         }));
 
       // Vorbereiten der Tech-Matrix-Bewertungen
-      const techMatrixEvals = [];
+      const techMatrixEvaluations = [];
       for (const techId in techMatrix) {
         for (const criterionId in techMatrix[techId]) {
           const score = techMatrix[techId][criterionId];
-          if (score > 0) {
-            techMatrixEvals.push({
+          if (score && score > 0) {
+            techMatrixEvaluations.push({
               user_id: user.user_id,
               criterion_id: parseInt(criterionId),
               technology_id: parseInt(techId),
               score,
-              round: currentRound
+              round: currentRound,
+              fuzzy_vector: fuzzyTechMatrix[parseInt(techId)]?.[parseInt(criterionId)] || { a: 0, b: 0, c: 0 } // Füge den Fuzzy-Vektor hinzu
             });
           }
         }
       }
 
       // Alle Bewertungen zusammenführen
-      const allEvaluations = [...criteriaEvals, ...techMatrixEvals];
+      const allEvaluations = [...criteriaEvaluations, ...techMatrixEvaluations];
 
       // Bewertungen speichern
       const response = await fetch(`http://localhost:9000/cases/${id}/evaluations`, {
@@ -608,7 +729,7 @@ export default function EditCasePage({
                 <div>
                   <h2 className="text-lg font-medium mb-6">Criteria Evaluation</h2>
                   {data.criteria
-                    .filter(criterion => currentRound === 1 || needsReevaluation(criterion.id))
+                    .filter(criterion => shouldShowCriterion(criterion.id))
                     .map((criterion) => (
                     <div key={criterion.id} className="mb-4">
                       <label className={`block text-sm font-medium mb-1 ${needsReevaluation(criterion.id) ? 'text-orange-700' : 'text-gray-700'}`}>
@@ -640,7 +761,7 @@ export default function EditCasePage({
                     Rate {data.technologies[currentTechIndex].name}
                   </h2>
                   {data.criteria
-                    .filter(criterion => currentRound === 1 || needsReevaluation(criterion.id, data.technologies[currentTechIndex].id))
+                    .filter(criterion => shouldShowTechCriterion(data.technologies[currentTechIndex].id, criterion.id))
                     .map((criterion) => (
                     <div key={criterion.id} className="mb-4">
                       <label className={`block text-sm font-medium mb-1 ${needsReevaluation(criterion.id, data.technologies[currentTechIndex].id) ? 'text-orange-700' : 'text-gray-700'}`}>
