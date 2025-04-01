@@ -145,28 +145,31 @@ class Evaluation(db.Model):
     criterion = db.relationship("Criterion", back_populates="evaluations")
 
 class RoundAnalysis(db.Model):
+    """Analyseergebnis einer Runde."""
     __tablename__ = 'round_analysis'
+
     id = db.Column(db.Integer, primary_key=True)
     case_id = db.Column(db.Integer, db.ForeignKey('cases.id'), nullable=False)
     round_number = db.Column(db.Integer, nullable=False)
-    created_at = db.Column(db.DateTime, server_default=db.func.now())
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
-    # Statistiken für Kriterien
-    criteria_ok_percent = db.Column(db.Float)
-    criteria_total_count = db.Column(db.Integer)
-    criteria_ok_count = db.Column(db.Integer)
+    # Prozentsätze und Anzahlen
+    criteria_ok_percent = db.Column(db.Float, nullable=False)
+    criteria_total_count = db.Column(db.Integer, nullable=False)
+    criteria_ok_count = db.Column(db.Integer, nullable=False)
+    criteria_passed = db.Column(db.Boolean, nullable=False, default=False)
     
-    # Statistiken für Technologie-Matrix
-    tech_ok_percent = db.Column(db.Float)
-    tech_total_count = db.Column(db.Integer)
-    tech_ok_count = db.Column(db.Integer)
+    tech_ok_percent = db.Column(db.Float, nullable=False)
+    tech_total_count = db.Column(db.Integer, nullable=False)
+    tech_ok_count = db.Column(db.Integer, nullable=False)
+    tech_passed = db.Column(db.Boolean, nullable=False, default=False)
     
-    # Gesamtstatistik für Mittelwertabweichung
-    mean_distance_ok = db.Column(db.Boolean, default=False)
-    mean_distance_value = db.Column(db.Float)
+    # Distanz zum Mittelwert
+    mean_distance_ok = db.Column(db.Boolean, nullable=False)
+    mean_distance_value = db.Column(db.Float, nullable=False)
     
     # Gesamtergebnis
-    passed_analysis = db.Column(db.Boolean, default=False)
+    passed_analysis = db.Column(db.Boolean, nullable=False)
 
     def __repr__(self):
         return f"<RoundAnalysis Case {self.case_id} Round {self.round_number}>"

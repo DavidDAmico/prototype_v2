@@ -243,8 +243,23 @@ def get_case_evaluations(case_id):
         if not case:
             return jsonify({"message": "Case not found"}), 404
 
-        # Hole alle Evaluationen für diesen Case
-        evaluations = Evaluation.query.filter_by(case_id=case_id).all()
+        # Prüfen, ob ein bestimmter Benutzer und eine bestimmte Runde angefordert wurden
+        user_id = request.args.get('user_id', None)
+        round_number = request.args.get('round', None)
+        
+        # Basis-Query für alle Evaluationen dieses Cases
+        query = Evaluation.query.filter_by(case_id=case_id)
+        
+        # Wenn ein Benutzer angegeben wurde, nur dessen Bewertungen abrufen
+        if user_id:
+            query = query.filter_by(user_id=user_id)
+            
+        # Wenn eine Runde angegeben wurde, nur Bewertungen dieser Runde abrufen
+        if round_number:
+            query = query.filter_by(round=round_number)
+        
+        # Alle passenden Evaluationen abrufen
+        evaluations = query.all()
         
         if not evaluations:
             # Wenn keine Evaluationen gefunden wurden, geben wir leere Arrays zurück (kein 404)
@@ -267,7 +282,8 @@ def get_case_evaluations(case_id):
                     "score": float(eval.score),
                     "case_id": eval.case_id,
                     "round": eval.round,
-                    "created_at": eval.created_at.isoformat() if eval.created_at else None
+                    "created_at": eval.created_at.isoformat() if eval.created_at else None,
+                    "needs_reevaluation": eval.needs_reevaluation
                 })
             else:
                 # Tech-Matrix-Evaluation
@@ -279,7 +295,8 @@ def get_case_evaluations(case_id):
                     "score": float(eval.score),
                     "case_id": eval.case_id,
                     "round": eval.round,
-                    "created_at": eval.created_at.isoformat() if eval.created_at else None
+                    "created_at": eval.created_at.isoformat() if eval.created_at else None,
+                    "needs_reevaluation": eval.needs_reevaluation
                 })
 
         return jsonify({
@@ -287,8 +304,8 @@ def get_case_evaluations(case_id):
             "techMatrixEvaluations": tech_matrix_evaluations
         }), 200
     except Exception as e:
-        print(f"Error getting evaluations: {str(e)}")
-        return jsonify({"message": f"Error getting evaluations: {str(e)}"}), 500
+        print(f"Error in get_case_evaluations: {str(e)}")
+        return jsonify({"message": f"Error fetching evaluations: {str(e)}"}), 500
 
 @cases_bp.route('/<int:case_id>/evaluations', methods=['POST'])
 def save_case_evaluations(case_id):
@@ -896,45 +913,46 @@ def analyze_round(case_id):
             
             # Technologie-Matrix-Bewertungen analysieren
             for technology in technologies:
-                # Bewertungen aller Benutzer für diese Technologie-Kriterium-Kombination abrufen
-                all_tech_evals = Evaluation.query.filter_by(
-                    case_id=case_id,
-                    criterion_id=criterion.id,
-                    technology_id=technology.id,
-                    round=current_round
-                ).all()
-                
-                if len(all_tech_evals) > 0:
-                    # Mittelwert der Fuzzy-Vektoren berechnen
-                    mean_vector_a = float(np.mean([eval.fuzzy_vector_a for eval in all_tech_evals]))
-                    mean_vector_b = float(np.mean([eval.fuzzy_vector_b for eval in all_tech_evals]))
-                    mean_vector_c = float(np.mean([eval.fuzzy_vector_c for eval in all_tech_evals]))
-                    mean_vector = (mean_vector_a, mean_vector_b, mean_vector_c)
-                    
-                    # Bewertung des aktuellen Benutzers abrufen
-                    user_eval = Evaluation.query.filter_by(
+                for criterion in criteria:
+                    # Bewertungen aller Benutzer für diese Technologie-Kriterium-Kombination abrufen
+                    all_tech_evals = Evaluation.query.filter_by(
                         case_id=case_id,
-                        user_id=user.id,
                         criterion_id=criterion.id,
                         technology_id=technology.id,
                         round=current_round
-                    ).first()
+                    ).all()
                     
-                    if user_eval:
-                        # Fuzzy-Vektor des Benutzers
-                        user_vector = (float(user_eval.fuzzy_vector_a), float(user_eval.fuzzy_vector_b), float(user_eval.fuzzy_vector_c))
+                    if len(all_tech_evals) > 0:
+                        # Mittelwert der Fuzzy-Vektoren berechnen
+                        mean_vector_a = float(np.mean([eval.fuzzy_vector_a for eval in all_tech_evals]))
+                        mean_vector_b = float(np.mean([eval.fuzzy_vector_b for eval in all_tech_evals]))
+                        mean_vector_c = float(np.mean([eval.fuzzy_vector_c for eval in all_tech_evals]))
+                        mean_vector = (mean_vector_a, mean_vector_b, mean_vector_c)
                         
-                        # Distanz zum Mittelwert berechnen
-                        distance = float(calculate_fuzzy_distance(user_vector, mean_vector))
+                        # Bewertung des aktuellen Benutzers abrufen
+                        user_eval = Evaluation.query.filter_by(
+                            case_id=case_id,
+                            user_id=user.id,
+                            criterion_id=criterion.id,
+                            technology_id=technology.id,
+                            round=current_round
+                        ).first()
                         
-                        # Prüfen, ob die Bewertung im grünen Bereich ist
-                        if distance <= threshold_distance_mean:
-                            tech_ok_count += 1
-                            # Bewertung für die nächste Runde als "nicht zu bewerten" markieren
-                            user_eval.needs_reevaluation = False
-                        else:
-                            # Bewertung für die nächste Runde als "zu bewerten" markieren
-                            user_eval.needs_reevaluation = True
+                        if user_eval:
+                            # Fuzzy-Vektor des Benutzers
+                            user_vector = (float(user_eval.fuzzy_vector_a), float(user_eval.fuzzy_vector_b), float(user_eval.fuzzy_vector_c))
+                            
+                            # Distanz zum Mittelwert berechnen
+                            distance = float(calculate_fuzzy_distance(user_vector, mean_vector))
+                            
+                            # Prüfen, ob die Bewertung im grünen Bereich ist
+                            if distance <= threshold_distance_mean:
+                                tech_ok_count += 1
+                                # Bewertung für die nächste Runde als "nicht zu bewerten" markieren
+                                user_eval.needs_reevaluation = False
+                            else:
+                                # Bewertung für die nächste Runde als "zu bewerten" markieren
+                                user_eval.needs_reevaluation = True
         
         # Prozentsätze berechnen
         criteria_ok_percent = (criteria_ok_count / criteria_total_count * 100) if criteria_total_count > 0 else 0
@@ -1012,8 +1030,8 @@ def analyze_round(case_id):
         # Prüfen, ob die durchschnittliche Distanz im grünen Bereich ist
         mean_distance_ok = bool(mean_distance_value <= case.threshold_distance_mean)
         
-        # Gesamtergebnis - NUR die Distance to Mean berücksichtigen
-        passed_analysis = mean_distance_ok
+        # Gesamtergebnis - Alle drei Kriterien berücksichtigen
+        passed_analysis = mean_distance_ok and criteria_passed and tech_passed
         
         # Analyseergebnis speichern
         analysis = RoundAnalysis(
@@ -1022,9 +1040,11 @@ def analyze_round(case_id):
             criteria_ok_percent=criteria_ok_percent,
             criteria_total_count=criteria_total_count,
             criteria_ok_count=criteria_ok_count,
+            criteria_passed=criteria_passed,
             tech_ok_percent=tech_ok_percent,
             tech_total_count=tech_total_count,
             tech_ok_count=tech_ok_count,
+            tech_passed=tech_passed,
             mean_distance_ok=mean_distance_ok,
             mean_distance_value=mean_distance_value,
             passed_analysis=passed_analysis
@@ -1091,9 +1111,11 @@ def get_round_analysis(case_id):
                 "criteria_ok_percent": analysis.criteria_ok_percent,
                 "criteria_total_count": analysis.criteria_total_count,
                 "criteria_ok_count": analysis.criteria_ok_count,
+                "criteria_passed": analysis.criteria_passed,
                 "tech_ok_percent": analysis.tech_ok_percent,
                 "tech_total_count": analysis.tech_total_count,
                 "tech_ok_count": analysis.tech_ok_count,
+                "tech_passed": analysis.tech_passed,
                 "mean_distance_ok": analysis.mean_distance_ok,
                 "mean_distance_value": analysis.mean_distance_value,
                 "passed_analysis": analysis.passed_analysis

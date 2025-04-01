@@ -22,9 +22,11 @@ interface RoundAnalysis {
   criteria_ok_percent: number;
   criteria_total_count: number;
   criteria_ok_count: number;
+  criteria_passed: boolean;
   tech_ok_percent: number;
   tech_total_count: number;
   tech_ok_count: number;
+  tech_passed: boolean;
   mean_distance_ok: boolean;
   mean_distance_value: number;
   passed_analysis: boolean;
@@ -223,6 +225,7 @@ export default function RoundAnalysisPage() {
 
   // Hilfsfunktion für die Farbgebung basierend auf dem Prozentsatz
   const getColorClass = (percent: number, threshold: number) => {
+    console.log(`Percent: ${percent}, Threshold: ${threshold}, Result: ${percent >= threshold ? 'green' : 'red'}`);
     if (percent >= threshold) {
       return "bg-green-100 text-green-800";
     } else if (percent >= threshold * 0.8) {
@@ -428,12 +431,12 @@ export default function RoundAnalysisPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getColorClass(analysis.criteria_ok_percent, selectedCase.threshold_criteria_percent)}`}>
+                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${analysis.criteria_ok_percent >= 75 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                         {analysis.criteria_ok_percent.toFixed(1)}% ({analysis.criteria_ok_count}/{analysis.criteria_total_count})
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getColorClass(analysis.tech_ok_percent, selectedCase.threshold_tech_percent)}`}>
+                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${analysis.tech_ok_percent >= 75 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                         {analysis.tech_ok_percent.toFixed(1)}% ({analysis.tech_ok_count}/{analysis.tech_total_count})
                       </span>
                     </td>
