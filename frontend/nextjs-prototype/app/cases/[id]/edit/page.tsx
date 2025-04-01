@@ -350,9 +350,9 @@ export default function EditCasePage({
           user_id: user.user_id,
           criterion_id: criterion.id,
           technology_id: null,
-          score: criterion.rating,
-          case_id: parseInt(id),
-          round: currentRound
+          score: criterion.rating || 0,
+          round: currentRound,
+          fuzzy_vector: fuzzyCriteriaVectors[criterion.id] || { a: 0, b: 0, c: 0 } // Füge den Fuzzy-Vektor hinzu
         });
       }
     }
@@ -367,8 +367,8 @@ export default function EditCasePage({
             criterion_id: parseInt(criterionId),
             technology_id: parseInt(techId),
             score: rating,
-            case_id: parseInt(id),
-            round: currentRound
+            round: currentRound,
+            fuzzy_vector: fuzzyTechMatrix[parseInt(techId)]?.[parseInt(criterionId)] || { a: 0, b: 0, c: 0 } // Füge den Fuzzy-Vektor hinzu
           });
         }
       }
@@ -479,6 +479,55 @@ export default function EditCasePage({
     return previousEvaluation ? Number(previousEvaluation.score) : 0;
   };
 
+  // Hilfsfunktion, um zu prüfen, ob ein Kriterium als bewertet gilt
+  const isCriterionRated = (criterionId: number) => {
+    // Wenn das Kriterium in der aktuellen Runde bewertet wurde
+    if (data?.criteria.find(c => c.id === criterionId)?.rating && data?.criteria.find(c => c.id === criterionId)?.rating! > 0) {
+      return true;
+    }
+    
+    // Wenn das Kriterium aus einer früheren Runde übernommen wurde und nicht neu bewertet werden muss
+    if (currentRound > 1 && isCriterionLocked(criterionId)) {
+      return true;
+    }
+    
+    return false;
+  };
+
+  // Hilfsfunktion, um zu prüfen, ob eine Technologie-Kriterium-Kombination als bewertet gilt
+  const isTechCriterionRated = (techId: number, criterionId: number) => {
+    // Wenn die Kombination in der aktuellen Runde bewertet wurde
+    if (techMatrix[techId]?.[criterionId] && techMatrix[techId]?.[criterionId] > 0) {
+      return true;
+    }
+    
+    // Wenn die Kombination aus einer früheren Runde übernommen wurde und nicht neu bewertet werden muss
+    if (currentRound > 1 && isTechCriterionLocked(techId, criterionId)) {
+      return true;
+    }
+    
+    return false;
+  };
+
+  // Hilfsfunktion, um zu prüfen, ob eine Technologie vollständig bewertet ist
+  const isTechEvaluated = (techId: number) => {
+    if (!data) return false;
+    return data.criteria.every(criterion => 
+      isTechCriterionRated(techId, criterion.id)
+    );
+  };
+
+  // Hilfsfunktion, um zu prüfen, wie viele Kriterien einer bestimmten Gruppe bewertet wurden
+  const getGroupRatedCount = (groupName: string) => {
+    if (!data) return 0;
+    
+    // Filtere die Kriterien nach der Gruppe
+    const groupCriteria = data.criteria.filter(c => c.name.toLowerCase() === groupName.toLowerCase());
+    
+    // Zähle, wie viele Kriterien dieser Gruppe bewertet wurden
+    return groupCriteria.filter(c => isCriterionRated(c.id)).length;
+  };
+
   const handleSave = async () => {
     if (!user || !data) return;
 
@@ -549,13 +598,6 @@ export default function EditCasePage({
     }
   };
 
-  const isTechEvaluated = (techId: number) => {
-    if (!data) return false;
-    return data.criteria.every(criterion => 
-      (techMatrix[techId]?.[criterion.id] || 0) > 0
-    );
-  };
-
   if (!user) {
     return null; // Layout will handle the loading state
   }
@@ -596,56 +638,45 @@ export default function EditCasePage({
               <div className="text-sm mb-1">Criteria</div>
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                <span className="text-sm text-gray-600">{data?.criteria.filter(c => c.rating && c.rating > 0).length}/{data?.criteria.length} rated</span>
+                <span className="text-sm text-gray-600">{data?.criteria.filter(c => isCriterionRated(c.id)).length}/{data?.criteria.length} rated</span>
               </div>
               <div className="w-full bg-gray-100 h-1 rounded-full">
                 <div 
                   className="bg-green-500 h-1 rounded-full" 
                   style={{ 
-                    width: `${data ? (data.criteria.filter(c => c.rating && c.rating > 0).length / data.criteria.length) * 100 : 0}%` 
+                    width: `${data ? (data.criteria.filter(c => isCriterionRated(c.id)).length / data.criteria.length) * 100 : 0}%` 
                   }}
                 ></div>
               </div>
             </div>
 
             <div className="mb-6">
-              <div className="text-sm mb-1">Technologies</div>
+              <div className="text-sm mb-1">Technology Matrix</div>
               <div className="flex items-center gap-2 mb-2">
-                <div className={`w-2 h-2 rounded-full ${
-                  Object.values(techMatrix).reduce((sum, tech) => 
-                    sum + Object.values(tech).filter((rating): rating is number => typeof rating === 'number' && rating > 0).length, 0
-                  ) === (data ? data.technologies.length * data.criteria.length : 0)
-                    ? 'bg-green-500'
-                    : 'bg-blue-500'
-                }`}></div>
+                <div className="w-2 h-2 rounded-full bg-blue-500"></div>
                 <span className="text-sm text-gray-600">
-                  {Object.values(techMatrix).reduce((sum, tech) => 
-                    sum + Object.values(tech).filter((rating): rating is number => typeof rating === 'number' && rating > 0).length, 0
-                  )}/{data ? data.technologies.length * data.criteria.length : 0} rated
+                  {data?.technologies.filter(tech => 
+                    data.criteria.every(criterion => isTechCriterionRated(tech.id, criterion.id))
+                  ).length}/{data?.technologies.length} rated
                 </span>
               </div>
               <div className="w-full bg-gray-100 h-1 rounded-full">
-                {data && (
-                  <div 
-                    className={`${
-                      Object.values(techMatrix).reduce((sum, tech) => 
-                        sum + Object.values(tech).filter((rating): rating is number => typeof rating === 'number' && rating > 0).length, 0
-                      ) === (data.technologies.length * data.criteria.length) 
-                        ? 'bg-green-500' 
-                        : 'bg-blue-500'
-                    } h-1 rounded-full`}
-                    style={{ 
-                      width: `${data ? (Object.values(techMatrix).reduce((sum, tech) => 
-                        sum + Object.values(tech).filter((rating): rating is number => typeof rating === 'number' && rating > 0).length, 0
-                      ) / (data.technologies.length * data.criteria.length)) * 100 : 0}%` 
-                    }}
-                  ></div>
-                )}
+                <div 
+                  className="bg-blue-500 h-1 rounded-full" 
+                  style={{ 
+                    width: `${data ? (data.technologies.filter(tech => 
+                      data.criteria.every(criterion => isTechCriterionRated(tech.id, criterion.id))
+                    ).length / data.technologies.length) * 100 : 0}%` 
+                  }}
+                ></div>
               </div>
             </div>
 
             {data?.technologies.map((tech, index) => {
-              const completedRatings = Object.values(techMatrix[tech.id] || {}).filter((rating): rating is number => typeof rating === 'number' && rating > 0).length;
+              // Zähle die Kriterien, die für diese Technologie bewertet wurden
+              const completedRatings = data.criteria.filter(criterion => 
+                isTechCriterionRated(tech.id, criterion.id)
+              ).length;
               const totalPossible = data.criteria.length;
               const isComplete = completedRatings === totalPossible;
               

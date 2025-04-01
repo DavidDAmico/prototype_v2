@@ -30,6 +30,10 @@ interface RoundAnalysis {
   mean_distance_ok: boolean;
   mean_distance_value: number;
   passed_analysis: boolean;
+  criteria_mean_distance_value?: number;
+  criteria_mean_distance_ok?: boolean;
+  tech_mean_distance_value?: number;
+  tech_mean_distance_ok?: boolean;
 }
 
 export default function RoundAnalysisPage() {
@@ -59,6 +63,7 @@ export default function RoundAnalysisPage() {
     async function fetchCases() {
       try {
         setIsLoading(true);
+        // Verwende den Standard-Endpunkt, um alle Cases zu laden
         const res = await fetch("http://localhost:9000/cases/", {
           credentials: "include",
         });
@@ -68,7 +73,29 @@ export default function RoundAnalysisPage() {
         }
         
         const data = await res.json();
-        setCases(data);
+        
+        // Lade die Details für jeden Case einzeln
+        const casesWithDetails = await Promise.all(
+          data.map(async (c: any) => {
+            try {
+              const detailRes = await fetch(`http://localhost:9000/cases/${c.id}`, {
+                credentials: "include",
+              });
+              
+              if (detailRes.ok) {
+                const detailData = await detailRes.json();
+                return { ...c, ...detailData };
+              }
+              
+              return c;
+            } catch (error) {
+              console.error(`Error fetching details for case ${c.id}:`, error);
+              return c;
+            }
+          })
+        );
+        
+        setCases(casesWithDetails);
       } catch (error: any) {
         console.error("Error fetching cases:", error.message);
         setError("Failed to load cases. Please try again later.");
@@ -408,10 +435,19 @@ export default function RoundAnalysisPage() {
                     Round
                   </th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Criteria OK
+                    Criteria OK (%)
                   </th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Tech Matrix OK
+                    Tech Matrix OK (%)
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Criteria D2M (Mean Distance)
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Tech Matrix D2M (Mean Distance)
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Overall D2M (Mean Distance)
                   </th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Mean Distance
@@ -438,6 +474,16 @@ export default function RoundAnalysisPage() {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${analysis.tech_ok_percent >= 75 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                         {analysis.tech_ok_percent.toFixed(1)}% ({analysis.tech_ok_count}/{analysis.tech_total_count})
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${analysis.criteria_mean_distance_ok ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                        {analysis.criteria_mean_distance_value?.toFixed(3) || 'N/A'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${analysis.tech_mean_distance_ok ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                        {analysis.tech_mean_distance_value?.toFixed(3) || 'N/A'}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">

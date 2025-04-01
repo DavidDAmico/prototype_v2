@@ -871,13 +871,27 @@ def analyze_round(case_id):
         for user in users:
             # Kriterien-Bewertungen analysieren
             for criterion in criteria:
-                # Bewertungen aller Benutzer für dieses Kriterium abrufen
+                # Bewertungen aller Benutzer für dieses Kriterium abrufen (aktuelle Runde)
                 all_criterion_evals = Evaluation.query.filter_by(
                     case_id=case_id,
                     criterion_id=criterion.id,
                     technology_id=None,
                     round=current_round
                 ).all()
+                
+                # Wenn wir in einer höheren Runde sind, auch die Bewertungen aus der vorherigen Runde berücksichtigen,
+                # die nicht neu bewertet werden mussten
+                if current_round > 1:
+                    previous_criterion_evals = Evaluation.query.filter_by(
+                        case_id=case_id,
+                        criterion_id=criterion.id,
+                        technology_id=None,
+                        round=current_round-1,
+                        needs_reevaluation=False
+                    ).all()
+                    
+                    # Diese Bewertungen zur Liste der aktuellen Bewertungen hinzufügen
+                    all_criterion_evals.extend(previous_criterion_evals)
                 
                 if len(all_criterion_evals) > 0:
                     # Mittelwert der Fuzzy-Vektoren berechnen
@@ -886,41 +900,53 @@ def analyze_round(case_id):
                     mean_vector_c = float(np.mean([eval.fuzzy_vector_c for eval in all_criterion_evals]))
                     mean_vector = (mean_vector_a, mean_vector_b, mean_vector_c)
                     
-                    # Bewertung des aktuellen Benutzers abrufen
-                    user_eval = Evaluation.query.filter_by(
-                        case_id=case_id,
-                        user_id=user.id,
-                        criterion_id=criterion.id,
-                        technology_id=None,
-                        round=current_round
-                    ).first()
-                    
-                    if user_eval:
-                        # Fuzzy-Vektor des Benutzers
-                        user_vector = (float(user_eval.fuzzy_vector_a), float(user_eval.fuzzy_vector_b), float(user_eval.fuzzy_vector_c))
-                        
-                        # Distanz zum Mittelwert berechnen
+                    # Gesamtdistanz für dieses Kriterium berechnen
+                    criterion_total_distance = 0
+                    for evaluation in all_criterion_evals:
+                        user_vector = (float(evaluation.fuzzy_vector_a), float(evaluation.fuzzy_vector_b), float(evaluation.fuzzy_vector_c))
                         distance = float(calculate_fuzzy_distance(user_vector, mean_vector))
-                        
-                        # Prüfen, ob die Bewertung im grünen Bereich ist
-                        if distance <= threshold_distance_mean:
-                            criteria_ok_count += 1
-                            # Bewertung für die nächste Runde als "nicht zu bewerten" markieren
-                            user_eval.needs_reevaluation = False
-                        else:
-                            # Bewertung für die nächste Runde als "zu bewerten" markieren
-                            user_eval.needs_reevaluation = True
+                        criterion_total_distance += distance
+                    
+                    # Durchschnittliche Distanz für dieses Kriterium berechnen
+                    criterion_mean_distance = criterion_total_distance / len(all_criterion_evals)
+                    
+                    # Prüfen, ob die durchschnittliche Distanz im grünen Bereich ist
+                    if criterion_mean_distance <= threshold_distance_mean:
+                        criteria_ok_count += 1
+                    
+                    # Für jeden Benutzer prüfen, ob seine Bewertung neu bewertet werden muss
+                    for user_eval in all_criterion_evals:
+                        if user_eval.round == current_round:  # Nur Bewertungen der aktuellen Runde markieren
+                            user_vector = (float(user_eval.fuzzy_vector_a), float(user_eval.fuzzy_vector_b), float(user_eval.fuzzy_vector_c))
+                            distance = float(calculate_fuzzy_distance(user_vector, mean_vector))
+                            
+                            # Bewertung für die nächste Runde markieren
+                            user_eval.needs_reevaluation = distance > threshold_distance_mean
             
             # Technologie-Matrix-Bewertungen analysieren
             for technology in technologies:
                 for criterion in criteria:
-                    # Bewertungen aller Benutzer für diese Technologie-Kriterium-Kombination abrufen
+                    # Bewertungen aller Benutzer für diese Technologie-Kriterium-Kombination abrufen (aktuelle Runde)
                     all_tech_evals = Evaluation.query.filter_by(
                         case_id=case_id,
                         criterion_id=criterion.id,
                         technology_id=technology.id,
                         round=current_round
                     ).all()
+                    
+                    # Wenn wir in einer höheren Runde sind, auch die Bewertungen aus der vorherigen Runde berücksichtigen,
+                    # die nicht neu bewertet werden mussten
+                    if current_round > 1:
+                        previous_tech_evals = Evaluation.query.filter_by(
+                            case_id=case_id,
+                            criterion_id=criterion.id,
+                            technology_id=technology.id,
+                            round=current_round-1,
+                            needs_reevaluation=False
+                        ).all()
+                        
+                        # Diese Bewertungen zur Liste der aktuellen Bewertungen hinzufügen
+                        all_tech_evals.extend(previous_tech_evals)
                     
                     if len(all_tech_evals) > 0:
                         # Mittelwert der Fuzzy-Vektoren berechnen
@@ -929,30 +955,28 @@ def analyze_round(case_id):
                         mean_vector_c = float(np.mean([eval.fuzzy_vector_c for eval in all_tech_evals]))
                         mean_vector = (mean_vector_a, mean_vector_b, mean_vector_c)
                         
-                        # Bewertung des aktuellen Benutzers abrufen
-                        user_eval = Evaluation.query.filter_by(
-                            case_id=case_id,
-                            user_id=user.id,
-                            criterion_id=criterion.id,
-                            technology_id=technology.id,
-                            round=current_round
-                        ).first()
-                        
-                        if user_eval:
-                            # Fuzzy-Vektor des Benutzers
-                            user_vector = (float(user_eval.fuzzy_vector_a), float(user_eval.fuzzy_vector_b), float(user_eval.fuzzy_vector_c))
-                            
-                            # Distanz zum Mittelwert berechnen
+                        # Gesamtdistanz für diese Technologie-Kriterium-Kombination berechnen
+                        tech_criterion_total_distance = 0
+                        for evaluation in all_tech_evals:
+                            user_vector = (float(evaluation.fuzzy_vector_a), float(evaluation.fuzzy_vector_b), float(evaluation.fuzzy_vector_c))
                             distance = float(calculate_fuzzy_distance(user_vector, mean_vector))
-                            
-                            # Prüfen, ob die Bewertung im grünen Bereich ist
-                            if distance <= threshold_distance_mean:
-                                tech_ok_count += 1
-                                # Bewertung für die nächste Runde als "nicht zu bewerten" markieren
-                                user_eval.needs_reevaluation = False
-                            else:
-                                # Bewertung für die nächste Runde als "zu bewerten" markieren
-                                user_eval.needs_reevaluation = True
+                            tech_criterion_total_distance += distance
+                        
+                        # Durchschnittliche Distanz für diese Technologie-Kriterium-Kombination berechnen
+                        tech_criterion_mean_distance = tech_criterion_total_distance / len(all_tech_evals)
+                        
+                        # Prüfen, ob die durchschnittliche Distanz im grünen Bereich ist
+                        if tech_criterion_mean_distance <= threshold_distance_mean:
+                            tech_ok_count += 1
+                        
+                        # Für jeden Benutzer prüfen, ob seine Bewertung neu bewertet werden muss
+                        for user_eval in all_tech_evals:
+                            if user_eval.round == current_round:  # Nur Bewertungen der aktuellen Runde markieren
+                                user_vector = (float(user_eval.fuzzy_vector_a), float(user_eval.fuzzy_vector_b), float(user_eval.fuzzy_vector_c))
+                                distance = float(calculate_fuzzy_distance(user_vector, mean_vector))
+                                
+                                # Bewertung für die nächste Runde markieren
+                                user_eval.needs_reevaluation = distance > threshold_distance_mean
         
         # Prozentsätze berechnen
         criteria_ok_percent = (criteria_ok_count / criteria_total_count * 100) if criteria_total_count > 0 else 0
@@ -964,33 +988,24 @@ def analyze_round(case_id):
         
         # Tatsächliche durchschnittliche Distanz zum Mittelwert berechnen
         # Wir verwenden die berechneten Distanzen aus den Fuzzy-Vektoren
-        # Für Runde > 1 müssen wir auch die Bewertungen aus der vorherigen Runde berücksichtigen, die nicht neu bewertet wurden
         
         # Alle Bewertungen für die aktuelle Runde sammeln
         all_current_evaluations = Evaluation.query.filter_by(case_id=case_id, round=current_round).all()
-        
-        # Wenn wir in einer höheren Runde sind, auch die Bewertungen aus der vorherigen Runde hinzufügen, die nicht neu bewertet wurden
-        if current_round > 1:
-            previous_round = current_round - 1
-            previous_evaluations = Evaluation.query.filter_by(
-                case_id=case_id, 
-                round=previous_round, 
-                needs_reevaluation=False
-            ).all()
-            
-            # Diese Bewertungen zur Liste der aktuellen Bewertungen hinzufügen
-            all_evaluations = all_current_evaluations + previous_evaluations
-        else:
-            all_evaluations = all_current_evaluations
         
         # Distanz zum Mittelwert für jede Bewertung berechnen
         total_distance = 0
         total_evaluations = 0
         
+        # Separate Werte für Kriterien und Technologie-Matrix
+        criteria_total_distance = 0
+        criteria_total_evaluations = 0
+        tech_total_distance = 0
+        tech_total_evaluations = 0
+        
         # Für jede Kriterium-Technologie-Kombination die Distanz zum Mittelwert berechnen
         for criterion in criteria:
             # Kriterien-Bewertungen
-            criterion_evals = [e for e in all_evaluations if e.criterion_id == criterion.id and e.technology_id is None]
+            criterion_evals = [e for e in all_current_evaluations if e.criterion_id == criterion.id and e.technology_id is None]
             
             if criterion_evals:
                 # Mittelwert der Fuzzy-Vektoren berechnen
@@ -1005,10 +1020,12 @@ def analyze_round(case_id):
                     distance = float(calculate_fuzzy_distance(user_vector, mean_vector))
                     total_distance += distance
                     total_evaluations += 1
+                    criteria_total_distance += distance
+                    criteria_total_evaluations += 1
             
             # Technologie-Kriterium-Bewertungen
             for technology in technologies:
-                tech_criterion_evals = [e for e in all_evaluations if e.criterion_id == criterion.id and e.technology_id == technology.id]
+                tech_criterion_evals = [e for e in all_current_evaluations if e.criterion_id == criterion.id and e.technology_id == technology.id]
                 
                 if tech_criterion_evals:
                     # Mittelwert der Fuzzy-Vektoren berechnen
@@ -1023,12 +1040,20 @@ def analyze_round(case_id):
                         distance = float(calculate_fuzzy_distance(user_vector, mean_vector))
                         total_distance += distance
                         total_evaluations += 1
+                        tech_total_distance += distance
+                        tech_total_evaluations += 1
         
         # Durchschnittliche Distanz berechnen
         mean_distance_value = float(total_distance / total_evaluations) if total_evaluations > 0 else 0.0
         
-        # Prüfen, ob die durchschnittliche Distanz im grünen Bereich ist
+        # Separate durchschnittliche Distanzen für Kriterien und Technologie-Matrix berechnen
+        criteria_mean_distance_value = float(criteria_total_distance / criteria_total_evaluations) if criteria_total_evaluations > 0 else 0.0
+        tech_mean_distance_value = float(tech_total_distance / tech_total_evaluations) if tech_total_evaluations > 0 else 0.0
+        
+        # Prüfen, ob die durchschnittlichen Distanzen im grünen Bereich sind
         mean_distance_ok = bool(mean_distance_value <= case.threshold_distance_mean)
+        criteria_mean_distance_ok = bool(criteria_mean_distance_value <= case.threshold_distance_mean)
+        tech_mean_distance_ok = bool(tech_mean_distance_value <= case.threshold_distance_mean)
         
         # Gesamtergebnis - Alle drei Kriterien berücksichtigen
         passed_analysis = mean_distance_ok and criteria_passed and tech_passed
@@ -1047,6 +1072,10 @@ def analyze_round(case_id):
             tech_passed=tech_passed,
             mean_distance_ok=mean_distance_ok,
             mean_distance_value=mean_distance_value,
+            criteria_mean_distance_value=criteria_mean_distance_value,
+            criteria_mean_distance_ok=criteria_mean_distance_ok,
+            tech_mean_distance_value=tech_mean_distance_value,
+            tech_mean_distance_ok=tech_mean_distance_ok,
             passed_analysis=passed_analysis
         )
         db.session.add(analysis)
@@ -1077,6 +1106,10 @@ def analyze_round(case_id):
             "tech_passed": tech_passed,
             "mean_distance_ok": mean_distance_ok,
             "mean_distance_value": mean_distance_value,
+            "criteria_mean_distance_value": criteria_mean_distance_value,
+            "criteria_mean_distance_ok": criteria_mean_distance_ok,
+            "tech_mean_distance_value": tech_mean_distance_value,
+            "tech_mean_distance_ok": tech_mean_distance_ok,
             "passed_analysis": passed_analysis,
             "next_round": None if passed_analysis else case.current_round
         }), 200
@@ -1118,6 +1151,10 @@ def get_round_analysis(case_id):
                 "tech_passed": analysis.tech_passed,
                 "mean_distance_ok": analysis.mean_distance_ok,
                 "mean_distance_value": analysis.mean_distance_value,
+                "criteria_mean_distance_value": analysis.criteria_mean_distance_value,
+                "criteria_mean_distance_ok": analysis.criteria_mean_distance_ok,
+                "tech_mean_distance_value": analysis.tech_mean_distance_value,
+                "tech_mean_distance_ok": analysis.tech_mean_distance_ok,
                 "passed_analysis": analysis.passed_analysis
             })
         

@@ -168,6 +168,13 @@ class RoundAnalysis(db.Model):
     mean_distance_ok = db.Column(db.Boolean, nullable=False)
     mean_distance_value = db.Column(db.Float, nullable=False)
     
+    # Separate Distanzwerte für Kriterien und Technologie-Matrix
+    criteria_mean_distance_value = db.Column(db.Float, nullable=True)
+    criteria_mean_distance_ok = db.Column(db.Boolean, nullable=True)
+    
+    tech_mean_distance_value = db.Column(db.Float, nullable=True)
+    tech_mean_distance_ok = db.Column(db.Boolean, nullable=True)
+    
     # Gesamtergebnis
     passed_analysis = db.Column(db.Boolean, nullable=False)
 
