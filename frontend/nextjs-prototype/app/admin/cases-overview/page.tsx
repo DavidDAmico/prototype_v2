@@ -24,13 +24,16 @@ interface CaseOverview {
   created_at: string;
   criteria_count: number;
   technologies_count: number;
+  current_round: number;
   assigned_users: EvaluationStatus[];
 }
 
 export default function CasesOverviewPage() {
   const { user, loading } = useAuth();
   const [casesOverview, setCasesOverview] = useState<CaseOverview[]>([]);
+  const [filteredCasesOverview, setFilteredCasesOverview] = useState<CaseOverview[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [roundFilter, setRoundFilter] = useState<number | "all">("all");
   const router = useRouter();
 
   useEffect(() => {
@@ -63,6 +66,14 @@ export default function CasesOverviewPage() {
       fetchCasesOverview();
     }
   }, [user, router]);
+
+  useEffect(() => {
+    if (roundFilter === "all") {
+      setFilteredCasesOverview(casesOverview);
+    } else {
+      setFilteredCasesOverview(casesOverview.filter((caseItem) => caseItem.current_round === roundFilter));
+    }
+  }, [casesOverview, roundFilter]);
 
   // Helfer-Funktion für die Fortschrittsanzeige
   const getProgressColor = (status: string) => {
@@ -108,19 +119,34 @@ export default function CasesOverviewPage() {
     <div className="w-full">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Cases Overview</h1>
+        <div className="flex items-center gap-3">
+          <label className="text-sm text-gray-500">Runde:</label>
+          <select
+            className="px-3 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors text-sm"
+            value={roundFilter}
+            onChange={(e) => setRoundFilter(e.target.value === "all" ? "all" : parseInt(e.target.value))}
+          >
+            <option value="all">Alle</option>
+            {Array.from({ length: 10 }, (_, i) => i + 1).map((round) => (
+              <option key={round} value={round}>
+                Runde {round}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {isLoading ? (
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <p className="text-gray-500 text-center">Loading cases data...</p>
         </div>
-      ) : casesOverview.length === 0 ? (
+      ) : filteredCasesOverview.length === 0 ? (
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <p className="text-gray-500 text-center">No cases found.</p>
         </div>
       ) : (
         <div className="space-y-6">
-          {casesOverview.map((caseItem) => (
+          {filteredCasesOverview.map((caseItem) => (
             <div key={caseItem.id} className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
               <div className="flex justify-between items-start mb-4">
                 <div>
@@ -134,6 +160,9 @@ export default function CasesOverviewPage() {
                     </span>
                     <span>
                       {caseItem.criteria_count} Criteria • {caseItem.technologies_count} Technologies
+                    </span>
+                    <span>
+                      Runde: {caseItem.current_round}
                     </span>
                   </div>
                 </div>

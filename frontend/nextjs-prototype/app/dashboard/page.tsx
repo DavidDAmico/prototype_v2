@@ -11,6 +11,7 @@ interface Case {
   case_type: string;
   created_at: string;
   name?: string;
+  current_round?: number;
   // Add more fields if needed
 }
 
@@ -192,19 +193,24 @@ export default function DashboardPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {caseHistory.map((case_) => (
                 <Link
-                  href={`/cases/${case_.id}/edit`}
+                  href={`/cases/${case_.id}/view`}
                   key={case_.id}
                   className="block"
                 >
                   <div className="bg-white p-4 rounded-lg shadow-sm hover:shadow-md transition-shadow border border-gray-100">
                     <div className="flex justify-between items-center mb-2">
                       <span className="font-medium">{case_.name || `Case ${case_.id}`}</span>
-                      <span className="text-sm text-blue-600 px-2 py-1 bg-blue-50 rounded">
-                        {case_.case_type}
+                      <span className="text-sm text-green-600 px-2 py-1 bg-green-50 rounded">
+                        Completed
                       </span>
                     </div>
-                    <div className="text-sm text-gray-500">
-                      {new Date(case_.created_at).toLocaleDateString()}
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-500">
+                        {new Date(case_.created_at).toLocaleDateString()}
+                      </span>
+                      <span className="text-sm text-gray-500">
+                        Round {case_.current_round}
+                      </span>
                     </div>
                   </div>
                 </Link>

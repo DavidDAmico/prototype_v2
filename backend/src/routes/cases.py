@@ -572,9 +572,19 @@ def get_assigned_cases(user_id):
         )
     ).all()
 
-    print(f"DEBUG: Found {len(cases)} cases for user {user_id}")
+    # Filtere Cases, die bereits abgeschlossen sind (letzte Rundenanalyse bestanden)
+    active_cases = []
     for case in cases:
-        print(f"DEBUG: Case {case.id} - Assigned User: {case.assigned_user_id}")
+        # Letzte Rundenanalyse für diesen Case abrufen
+        latest_analysis = RoundAnalysis.query.filter_by(case_id=case.id).order_by(RoundAnalysis.round_number.desc()).first()
+        
+        # Case ist aktiv, wenn keine Analyse vorhanden ist oder die letzte Analyse nicht bestanden wurde
+        if not latest_analysis or not latest_analysis.passed_analysis:
+            active_cases.append(case)
+
+    print(f"DEBUG: Found {len(active_cases)} active cases for user {user_id}")
+    for case in active_cases:
+        print(f"DEBUG: Active Case {case.id} - Assigned User: {case.assigned_user_id}")
         # Prüfen, ob der Benutzer direkt dem Case zugewiesen ist
         is_directly_assigned = user_id in [u.id for u in case.users]
         print(f"DEBUG: User {user_id} is directly assigned to case {case.id}: {is_directly_assigned}")
@@ -588,8 +598,9 @@ def get_assigned_cases(user_id):
             "created_at": c.created_at.isoformat() if c.created_at else None,
             "assigned_user_id": c.assigned_user_id,
             "is_directly_assigned": user_id in [u.id for u in c.users],
-            "name": c.name if c.name else f"Case {c.id}"  # Name des Cases hinzufügen
-        } for c in cases
+            "name": c.name if c.name else f"Case {c.id}",  # Name des Cases hinzufügen
+            "current_round": c.current_round  # Aktuelle Runde hinzufügen
+        } for c in active_cases
     ]), 200
 
 @cases_bp.route('/history/<int:user_id>', methods=['GET'])
@@ -642,7 +653,8 @@ def get_case_history(user_id):
             "created_at": c.created_at.isoformat() if c.created_at else None,
             "assigned_user_id": c.assigned_user_id,
             "is_directly_assigned": user_id in [u.id for u in c.users],
-            "name": c.name if c.name else f"Case {c.id}"  # Name des Cases hinzufügen
+            "name": c.name if c.name else f"Case {c.id}",  # Name des Cases hinzufügen
+            "current_round": c.current_round  # Aktuelle Runde hinzufügen
         } for c in completed_cases
     ]), 200
 
@@ -718,6 +730,7 @@ def get_cases_overview():
                 "created_at": case.created_at.isoformat() if case.created_at else None,
                 "criteria_count": len(case.criteria),
                 "technologies_count": len(case.technologies),
+                "current_round": case.current_round,  # Aktuelle Runde hinzufügen
                 "assigned_users": user_evaluation_status
             }
             

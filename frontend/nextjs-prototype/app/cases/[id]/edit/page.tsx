@@ -123,6 +123,24 @@ export default function EditCasePage({
           console.log("[Page] Current round set to:", caseData.current_round);
         }
 
+        // Prüfen, ob der Case bereits abgeschlossen ist (letzte Rundenanalyse bestanden)
+        const analysisResponse = await fetch(`http://localhost:9000/cases/${id}/round-analysis`, {
+          credentials: 'include',
+        });
+        
+        if (analysisResponse.ok) {
+          const analysisData = await analysisResponse.json();
+          const latestAnalysis = analysisData.length > 0 ? 
+            analysisData.sort((a: any, b: any) => b.round_number - a.round_number)[0] : null;
+            
+          // Wenn die letzte Analyse bestanden wurde, zur History umleiten
+          if (latestAnalysis && latestAnalysis.passed_analysis) {
+            console.log("[Page] Case is completed, redirecting to history");
+            router.push('/dashboard');
+            return;
+          }
+        }
+
         // 2. Hole existierende Bewertungen
         const evaluationsResponse = await fetch(`http://localhost:9000/cases/${id}/evaluations`, {
           credentials: 'include',
@@ -386,7 +404,9 @@ export default function EditCasePage({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
         },
+        mode: 'cors',
         credentials: 'include',
         body: JSON.stringify({
           evaluations: allEvaluations
@@ -397,25 +417,9 @@ export default function EditCasePage({
         throw new Error(`Error saving evaluations: ${response.status} ${response.statusText}`);
       }
 
-      setSuccessMessage('Evaluations saved successfully');
+      // Bei Erfolg zur Success-Page weiterleiten
+      router.push(`/success?action=evaluateCase&caseId=${id}&roundId=${currentRound}`);
 
-      // Prüfen, ob alle Benutzer ihre Bewertungen abgeschlossen haben
-      // und ob wir die Rundenanalyse starten können
-      if (user.role === 'master') {
-        // Hole aktuelle Case-Daten, um zu prüfen, ob alle Benutzer bewertet haben
-        const caseResponse = await fetch(`http://localhost:9000/cases/${id}`, {
-          credentials: 'include',
-        });
-        
-        if (caseResponse.ok) {
-          const updatedCaseData = await caseResponse.json();
-          const allUsersEvaluated = updatedCaseData.users?.every((u: any) => u.has_evaluated);
-          
-          if (allUsersEvaluated) {
-            setSuccessMessage('All users have completed their evaluations. You can now analyze this round.');
-          }
-        }
-      }
     } catch (error: any) {
       console.error('[Page] Error saving evaluations:', error);
       setErrorMessage(error.message);
