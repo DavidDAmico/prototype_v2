@@ -1,0 +1,106 @@
+.container {
+  padding: 1rem;
+  background: transparent;
+  border-radius: 0.5rem;
+}
+
+.criterionName {
+  font-weight: 500;
+  margin-bottom: 1rem;
+  color: #374151;
+}
+
+.scaleContainer {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 1rem;
+  align-items: center;
+  margin-top: 1rem;
+}
+
+.optionContainer {
+  flex: 1;
+  text-align: center;
+}
+
+.radioLabel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  gap: 0.75rem;
+  position: relative;
+}
+
+.radioInput {
+  position: absolute;
+  opacity: 0;
+  cursor: pointer;
+  height: 0;
+  width: 0;
+}
+
+.customRadio {
+  height: 1.25rem;
+  width: 1.25rem;
+  background-color: #fff;
+  border: 2px solid #d1d5db;
+  border-radius: 50%;
+  display: inline-block;
+  position: relative;
+  transition: all 0.2s ease;
+  margin-top: auto;
+}
+
+.radioInput:checked ~ .customRadio {
+  border-color: #3b82f6;
+  background-color: #3b82f6;
+}
+
+.customRadio:after {
+  content: "";
+  position: absolute;
+  display: none;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: white;
+}
+
+.radioInput:checked ~ .customRadio:after {
+  display: block;
+}
+
+.labelText {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  text-align: center;
+  min-height: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (max-width: 768px) {
+  .scaleContainer {
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .optionContainer {
+    width: 100%;
+  }
+
+  .radioLabel {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 1rem;
+  }
+
+  .labelText {
+    max-width: none;
+  }
+}

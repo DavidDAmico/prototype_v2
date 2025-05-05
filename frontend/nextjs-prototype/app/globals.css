@@ -1,0 +1,121 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Standard Light Mode Farben */
+:root {
+  --background: #ffffff;
+  --foreground: #000000; /* Textfarbe auf Schwarz setzen */
+  --input-text: #000000;
+  --input-background: #ffffff;
+  --input-border: #cccccc;
+  --button-background: #2563eb;
+  --button-text: white;
+  --button-hover: #1d4ed8;
+}
+
+/* Dark Mode Farben */
+.dark {
+  --background: #22272e;
+  --foreground: #ffffff; /* Textfarbe auf Weiß setzen */
+  --input-text: #ffffff;
+  --input-background: #2a2d32;
+  --input-border: #666c75;
+  --button-background: #1e40af;
+  --button-text: white;
+  --button-hover: #1e3a8a;
+}
+
+/* Hintergrund sofort umschalten */
+html, body {
+  min-height: 100%;
+  background-color: var(--background) !important;
+  color: var(--foreground) !important;
+  transition: none !important;
+}
+
+/* Standard-Container */
+.w-full, .container, .card {
+  background-color: var(--background);
+  color: var(--foreground);
+  transition: none;
+}
+
+.dark .w-full, .dark .container, .dark .card {
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+/* Eigene Klasse für das fixe blaue Frame – soll immer gleich aussehen */
+.fixed-blue-frame {
+  background-color: #bfdbfe !important; /* Helles Blau */
+  color: #000000 !important;            /* Schwarzer Text */
+}
+
+/* Erzwinge innerhalb des Frames immer schwarze Textfarbe */
+.fixed-blue-frame,
+.fixed-blue-frame * {
+  color: #000000 !important;
+}
+
+/* Einheitliche Buttons (nicht betroffen, da Icons und Buttons eigene Klassen haben)
+   Buttons mit der Klasse "custom-action-button" werden hieraus ausgenommen */
+button:not(.custom-action-button), 
+.btn:not(.custom-action-button) {
+  background-color: var(--button-background) !important;
+  color: var(--button-text) !important;
+  padding: 0.75rem 1.25rem;
+  border-radius: 0.375rem;
+  font-weight: 500;
+  text-align: center;
+  border: none;
+  display: inline-block;
+  width: fit-content;
+  opacity: 1 !important;
+  transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
+}
+
+.dark button:not(.custom-action-button), 
+.dark .btn:not(.custom-action-button) {
+  background-color: var(--button-background) !important;
+  color: var(--button-text) !important;
+  opacity: 1 !important;
+}
+
+button:not(.custom-action-button):hover, 
+.btn:not(.custom-action-button):hover {
+  background-color: var(--button-hover) !important;
+}
+
+.dark button:not(.custom-action-button):hover, 
+.dark .btn:not(.custom-action-button):hover {
+  background-color: var(--button-hover) !important;
+}
+
+/* Globale Label-Regeln bleiben unverändert */
+label {
+  color: var(--foreground);
+}
+
+.dark label {
+  color: white;
+}
+
+/* Fix für h2 und p – global, aber innerhalb fixed-blue-frame werden sie überschrieben */
+h2, p {
+  color: #000000 !important;
+}
+
+.dark h2, .dark p {
+  color: #ffffff !important;
+}
+
+/* Eigene Klasse für weiße Buttons außerhalb des Headers */
+.white-button {
+  background-color: white !important;
+  color: black !important;
+}
+
+.white-button:hover {
+  background-color: #e5e7eb !important; /* Leichtes Grau bei Hover */
+}

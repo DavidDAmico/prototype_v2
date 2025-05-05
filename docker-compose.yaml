@@ -1,0 +1,46 @@
+services:
+
+  PT_db:
+    container_name: prototype_db
+    image: postgres:16
+    environment:
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=asdf1234
+      - POSTGRES_DB=prototypeDB
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - pt_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d prototypeDB"]
+      interval: 10s
+      retries: 5
+      timeout: 5s
+
+  backend_server:
+    container_name: backend_server
+    build:
+      context: backend
+      dockerfile: Dockerfile
+    environment:
+      - DBNAME=prototypeDB
+      - DBUSER=admin
+      - DBPASS=asdf1234
+      - DBHOST=PT_db
+      - FLASK_ENV=production
+    ports:
+      - "9000:9000"
+    depends_on:
+      PT_db:
+        condition: service_healthy
+    networks:
+      - pt_network
+
+volumes:
+  pgdata: {}
+
+networks:
+  pt_network:
+    driver: bridge
